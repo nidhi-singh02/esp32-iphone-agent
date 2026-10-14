@@ -15,14 +15,14 @@ from .debug import Trace
 from .device import Device, DeviceError
 from .llm import LLM
 from .phone import Phone
-from .screen import Screen
+from .screen import open_screen
 
 DATA_DIR = Path(os.environ.get("HIDAGENT_DATA", Path.home() / ".hidagent"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DEBUG = os.environ.get("HIDAGENT_DEBUG") == "1"
 
 device = Device()
-screen = Screen(os.environ.get("AIRPLAY_NAME", "iPhone Agent"))
+screen = open_screen()
 phone = Phone(device, DATA_DIR / "calibration.json", screen)
 agent = Agent(phone, screen, LLM.from_env("ACTOR"), LLM.from_env("PLANNER"),
               Trace(DATA_DIR / "traces" if DEBUG else None))

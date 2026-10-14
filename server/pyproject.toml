@@ -12,6 +12,8 @@ dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27", "pillow>=10"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
+# Quartz window capture for SCREEN_SOURCE=macos_airplay. The marker keeps a Linux install from building it.
+mac = ["pyobjc-framework-Quartz>=10; sys_platform == 'darwin'"]
 
 [project.urls]
 Homepage = "https://github.com/onehumanbeing/esp32-iphone-agent"

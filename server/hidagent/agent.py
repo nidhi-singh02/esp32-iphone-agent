@@ -12,7 +12,7 @@ from .debug import Trace
 from .device import DeviceError
 from .llm import LLM
 from .phone import Phone
-from .screen import Screen
+from .screen import Frames
 
 log = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class BlindError(RuntimeError):
 
 
 class Agent:
-    def __init__(self, phone: Phone, screen: Screen, actor: LLM, planner: LLM, trace: Trace,
+    def __init__(self, phone: Phone, screen: Frames, actor: LLM, planner: LLM, trace: Trace,
                  max_steps: int = 40, max_failures: int = 3):
         self.phone, self.screen, self.actor, self.planner = phone, screen, actor, planner
         self.trace = trace

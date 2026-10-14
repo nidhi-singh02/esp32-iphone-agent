@@ -1,22 +1,59 @@
-"""The phone's screen, received over AirPlay mirroring by UxPlay, as JPEG frames."""
+"""The phone's screen as JPEG frames.
+
+SCREEN_SOURCE=uxplay (the default) runs UxPlay. SCREEN_SOURCE=macos_airplay captures the
+built-in macOS AirPlay Receiver window instead, and does not launch UxPlay.
+"""
 
 import asyncio
 import logging
 import os
 import subprocess
+import sys
 import threading
 import time
 
 log = logging.getLogger(__name__)
 
 
-class Screen:
+class Frames:
+    """Latest JPEG. `updated` is the time the pixels last changed, which is what calibration waits on."""
+
+    def __init__(self):
+        self.frame: bytes | None = None
+        self.updated = 0.0
+
+    @property
+    def aspect(self) -> float:
+        """Frame width / height, read from the JPEG header (portrait iPhone as a fallback)."""
+        f = self.frame or b""
+        i = f.find(b"\xff\xc0")  # baseline start-of-frame: ... height(2) width(2)
+        if i < 0 or len(f) < i + 9:
+            return 9 / 19.5
+        return int.from_bytes(f[i + 7:i + 9], "big") / int.from_bytes(f[i + 5:i + 7], "big")
+
+    async def settled(self, quiet: float = 0.35, least: float = 0.25, most: float = 4) -> None:
+        """Wait until the screen stops changing (AirPlay only sends frames on change)."""
+        started = time.time()
+        await asyncio.sleep(least)
+        while time.time() - self.updated < quiet and time.time() - started < most:
+            await asyncio.sleep(0.1)
+
+    async def fresh(self, since: float, timeout: float = 0.8) -> bytes | None:
+        """The first frame received after `since`, or None if none arrives in time."""
+        deadline = time.time() + timeout
+        while self.updated <= since:
+            if time.time() > deadline:
+                return None
+            await asyncio.sleep(0.02)
+        return self.frame
+
+
+class Screen(Frames):
     """Runs UxPlay with a GStreamer sink that writes JPEGs into a pipe; keeps the latest one."""
 
     def __init__(self, name: str = "iPhone Agent", fps: int = 8, quality: int = 75):
+        super().__init__()
         self.name, self.fps, self.quality = name, fps, quality
-        self.frame: bytes | None = None
-        self.updated = 0.0
         self._proc = None
         self._clients_at, self._clients_n = 0.0, None
         self._stopping = False
@@ -81,31 +118,6 @@ class Screen:
         self._clients_at, self._clients_n = time.time(), n
         return n
 
-    @property
-    def aspect(self) -> float:
-        """Frame width / height, read from the JPEG header (portrait iPhone as a fallback)."""
-        f = self.frame or b""
-        i = f.find(b"\xff\xc0")  # baseline start-of-frame: ... height(2) width(2)
-        if i < 0 or len(f) < i + 9:
-            return 9 / 19.5
-        return int.from_bytes(f[i + 7:i + 9], "big") / int.from_bytes(f[i + 5:i + 7], "big")
-
-    async def settled(self, quiet: float = 0.35, least: float = 0.25, most: float = 4) -> None:
-        """Wait until the screen stops changing (AirPlay only sends frames on change)."""
-        started = time.time()
-        await asyncio.sleep(least)
-        while time.time() - self.updated < quiet and time.time() - started < most:
-            await asyncio.sleep(0.1)
-
-    async def fresh(self, since: float, timeout: float = 0.8) -> bytes | None:
-        """The first frame received after `since`, or None if none arrives in time."""
-        deadline = time.time() + timeout
-        while self.updated <= since:
-            if time.time() > deadline:
-                return None
-            await asyncio.sleep(0.02)
-        return self.frame
-
     def _read(self, fd: int) -> None:
         buf = b""
         with os.fdopen(fd, "rb", buffering=0) as pipe:
@@ -114,3 +126,16 @@ class Screen:
                 while (start := buf.find(b"\xff\xd8")) >= 0 and (end := buf.find(b"\xff\xd9", start)) >= 0:
                     self.frame, self.updated = buf[start:end + 2], time.time()
                     buf = buf[end + 2:]
+
+
+def open_screen() -> Frames:
+    """The screen source named by SCREEN_SOURCE. uxplay is the default, so existing setups stay put."""
+    source = os.environ.get("SCREEN_SOURCE", "uxplay").strip().lower().replace("-", "_")
+    if source in ("", "uxplay"):
+        return Screen(os.environ.get("AIRPLAY_NAME", "iPhone Agent"))
+    if source == "macos_airplay":
+        if sys.platform != "darwin":
+            raise RuntimeError("SCREEN_SOURCE=macos_airplay only works on macOS.")
+        from .macos_airplay import MacAirPlayScreen
+        return MacAirPlayScreen.from_env()
+    raise RuntimeError(f"unknown SCREEN_SOURCE={source!r}; expected uxplay or macos_airplay")

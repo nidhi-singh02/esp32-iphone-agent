@@ -44,6 +44,35 @@ def test_explicit_token_param_is_used_directly():
     assert len(seen) == 1
 
 
+def test_gemini_openai_endpoint_gets_max_tokens_and_a_jpeg():
+    """Gemini's OpenAI-compatible endpoint accepts max_tokens. auto already sends that first."""
+    llm = LLM("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.8-flash",
+              api_key="test-key", token_param="max_tokens")
+    assert llm._http.headers["Authorization"] == "Bearer test-key"
+    seen = fake_server(llm, "max_tokens")
+    assert asyncio.run(llm.chat("sys", "what is on screen?", image=b"\xff\xd8\xff\xd9")) == "DO: wait"
+    body = seen[0]
+    assert "max_completion_tokens" not in body and body["max_tokens"] == 600
+    image = body["messages"][1]["content"][0]
+    assert image["type"] == "image_url" and image["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+    auto = LLM("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.8-flash")
+    seen = fake_server(auto, "max_tokens")
+    asyncio.run(auto.chat("sys", "hi"))
+    assert len(seen) == 1 and "max_completion_tokens" not in seen[0]
+
+
+def test_from_env_can_pin_max_tokens_for_gemini(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+    monkeypatch.setenv("LLM_MODEL", "gemini-3.8-flash")
+    monkeypatch.setenv("LLM_API_KEY", "k")
+    monkeypatch.setenv("LLM_TOKEN_PARAM", "max_tokens")
+    llm = LLM.from_env("ACTOR")
+    assert llm.model == "gemini-3.8-flash"
+    assert llm.token_param == "max_tokens" and llm._auto is False
+    assert str(llm._http.base_url).rstrip("/") == "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
 def test_extra_body_and_image_are_sent():
     llm = LLM("http://test/v1", "gpt", extra={"reasoning_effort": "none"})
     seen = fake_server(llm, "max_tokens")

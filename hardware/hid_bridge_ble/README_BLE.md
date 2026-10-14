@@ -23,6 +23,45 @@ Library: NimBLE-Arduino 2.5.1 (h2zero), on the esp32 Arduino core 3.3.x. The mou
 3. Run the server (`python -m hidagent`). The board connects and sends `hello`.
 4. If you want to pair again, use Forget This Device on the phone and reset the board.
 
+## Mac screen without UxPlay
+
+On a Mac, the server can read the iPhone from the built-in AirPlay Receiver instead of UxPlay. `SCREEN_SOURCE` defaults to `uxplay`, so an existing setup does not change. This source does not launch UxPlay.
+
+1. On the Mac, open System Settings, General, AirDrop and Handoff (on current macOS the pane is AirDrop & Continuity). Turn on AirPlay Receiver. Set "Allow AirPlay for" to Current User.
+2. On the iPhone, open Control Center, tap Screen Mirroring, and choose this Mac. Leave the mirroring window visible and not minimized. Leave the Mac unlocked, and do not cover the window with another window.
+3. Allow screen capture for the app that starts the server: System Settings, Privacy and Security, Screen Recording, turn on Terminal. Quit Terminal and open it again so the grant applies.
+4. From a clone of this branch:
+
+```bash
+git clone https://github.com/nidhi-singh02/esp32-iphone-agent
+cd esp32-iphone-agent
+git checkout ble-hid-esp32c3
+cd server
+python3 -m venv .venv
+.venv/bin/pip install -e ".[mac]"
+cp .env.example .env
+```
+
+Already cloned: `git checkout ble-hid-esp32c3 && git pull origin ble-hid-esp32c3`, then from `server/` run the `python3 -m venv` line through `cp .env.example .env`.
+
+5. Edit `.env` in `server/`. Set `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` (a commented Gemini example is in `.env.example`), and set:
+
+```bash
+SCREEN_SOURCE=macos_airplay
+```
+
+If the mirroring window is not owned by AirPlayUIAgent, set `AIRPLAY_WINDOW_OWNER` to a substring of its owner name, or `AIRPLAY_WINDOW_TITLE` to a substring of its title.
+
+6. From `server/`, start the server:
+
+```bash
+set -a && . ./.env && set +a && .venv/bin/python -m hidagent
+```
+
+Open `http://127.0.0.1:8890`. The live screen is the AirPlay window. Calibrate from Manual controls, the same way as with UxPlay.
+
+The capture follows that window only. A minimized window, a window on another Space, a locked Mac, or a missing Screen Recording grant stops the frames. Keep the window large enough to read: the JPEG is the window's pixels, with black letterbox bars removed.
+
 ## Known caveats
 - **Pointer speed:** Bluetooth reports aren't spaced as evenly as USB ones. If the agent overshoots or undershoots taps, change `STEP` and `STEP_MS` in `hid_bridge_ble.ino`, or the AssistiveTouch Tracking Speed slider. Keep Tracking Speed fixed after the server is calibrated.
 - **iOS pointer acceleration:** iOS speeds the pointer up based on how fast it moves. Constant pace moves keep that predictable, but a move can still land a few pixels off. `home` slams into the top left corner to reset the position.
