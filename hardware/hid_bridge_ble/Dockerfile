@@ -35,7 +35,10 @@ RUN for i in 1 2 3; do \
       sleep 10; \
     done; exit 1
 
-ENV FQBN="esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=huge_app"
+# FlashMode=dio makes arduino-cli pick the DIO bootloader. The default (QIO) bootloader switches the
+# flash chip into quad mode itself, whatever the image header says, and on many C3 boards the
+# flash then reads back garbage: "partition 0 invalid magic number" boot loop.
+ENV FQBN="esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=huge_app,FlashMode=dio,FlashFreq=40"
 WORKDIR /src
 # Mount the sketch folder at /src/hid_bridge_ble and an output folder at /out.
 CMD ["sh", "-c", "arduino-cli compile -b \"$FQBN\" --output-dir /out hid_bridge_ble && ls -l /out/*.merged.bin"]
