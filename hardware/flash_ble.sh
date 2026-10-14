@@ -3,7 +3,7 @@
 # Default target ESP32-C3 (USB CDC on boot). --classic targets a classic ESP32 (ESP32-WROOM-32E).
 set -euo pipefail
 cd "$(dirname "$0")"
-FQBN="esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=huge_app"
+FQBN="esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=huge_app,FlashMode=dio,FlashFreq=40"
 PORT=""; FLAGS=(--build-property "compiler.cpp.extra_flags=")
 for a in "$@"; do case $a in
   --debug) FLAGS=(--build-property "compiler.cpp.extra_flags=-DDEBUG_SERIAL=1") ;;

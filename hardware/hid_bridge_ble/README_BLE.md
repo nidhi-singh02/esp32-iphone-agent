@@ -29,4 +29,5 @@ Library: NimBLE-Arduino 2.5.1 (h2zero), on the esp32 Arduino core 3.3.x. The mou
 - **Wi-Fi and BLE share one radio:** commands can take a few ms longer than on USB.
 - **Lock screen:** when the phone is locked, the BLE link may drop, and you'll see `err ble not connected` until the phone reconnects.
 - **Flash size:** the build uses 93% of the default partition on the C3, so the flash script uses the huge_app partition.
+- **Boot loop with `partition 0 invalid magic number` (C3):** the default C3 bootloader is built for QIO flash and switches the flash chip into quad mode on its own, even if you flash with `--flash-mode dio`. Many C3 boards can't read flash that way. The build now uses `FlashMode=dio,FlashFreq=40`, which selects the DIO bootloader. Rebuild, run `esptool --chip esp32c3 --port PORT erase-flash`, then flash `build_ble/hid_bridge_ble.ino.merged.bin` at `0x0`.
 - **Classic ESP32:** the code is the same; just add `--classic`. It has no native USB, so serial goes through its USB to UART chip.
