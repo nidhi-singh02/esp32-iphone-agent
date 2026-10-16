@@ -91,10 +91,13 @@ CONFIRM_X = 700     # 0-1000: with TOP_BAR, the top-right corner where Save, Don
 FRESH_WAIT = 1.2    # seconds to wait for the first frame after an action (taps that change nothing cost this much)
 SETTLE_QUIET = 0.5  # seconds without a new frame before the screen counts as settled after an action
 TAP_TOLERANCE = 25  # 0-1000 units (2.5% of the screen): taps this close are the same target
-CHECK_PROMPT = """You check an iPhone screen before a button that saves or confirms is tapped.
+CHECK_PROMPT = """You check an iPhone screen just before the agent taps a button in the top-right corner.
 Goal of the whole task: {task}
-Look at the screenshot. Is everything the goal asks for what the screen shows right now (e.g. the time, date,
-name, text, toggles)? If the goal does not depend on anything shown here, answer OK.
+The agent says: {thought}
+First decide what that tap does. If it only opens or goes to another screen (a "+" that adds something, a back
+or close button, a menu, a tab), answer OK. Only if it saves or confirms what the screen shows (Save, Done,
+Add, a checkmark) do you compare the screen with the goal: are the time, date, name, text and toggles it shows
+what the goal asks for? If the goal does not depend on anything shown here, answer OK.
 Reply with one line only: OK, or WRONG: <what the screen shows and what the goal needs>."""
 
 META = ("t", "thought", "thought_zh", "think_s", "act_s", "shot", "_shot", "changed")  # not part of the action
@@ -258,7 +261,7 @@ class Agent:
                 await self._replan(stuck=stuck)
                 return False
             if name == "tap" and act["y"] <= TOP_BAR and act["x"] >= CONFIRM_X:
-                if wrong := await self._wrong_before_saving():
+                if wrong := await self._wrong_before_saving(act.get("thought", "")):
                     self._record(act.pop("_shot"), action="blocked", reason=f"did not tap {act['x']} {act['y']}: "
                                  f"{wrong}. Fix it first, then save.")
                     return False
@@ -286,15 +289,15 @@ class Agent:
         self.steps[-1]["changed"] = vision.changed(seen, self.screen.frame, ignore=tuple(spots))
         return False
 
-    async def _wrong_before_saving(self) -> str:
+    async def _wrong_before_saving(self, thought: str = "") -> str:
         """Why the screen does not match the goal, or "" when it does (or the check could not run).
 
         A confirm button saves whatever the screen shows: a wheel that drifted gets saved as the wrong alarm.
         """
         try:
             await self.screen.settled()
-            reply, _, _ = await self._ask("check", self.actor, CHECK_PROMPT.format(task=self.task), "Check now.",
-                                          square=True)
+            prompt = CHECK_PROMPT.format(task=self.task, thought=thought or "(nothing)")
+            reply, _, _ = await self._ask("check", self.actor, prompt, "Check now.", square=True)
         except BlindError:
             raise
         except Exception as e:  # the check must never stop a task that is going well

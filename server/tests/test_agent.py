@@ -349,3 +349,24 @@ def test_save_is_tapped_when_the_check_says_ok_or_cannot_run():
     agent, taps = _save_agent("")  # nothing useful back: do not hold up a task that is going well
     asyncio.run(agent._step())
     assert taps == [(0.905, 0.097)]
+
+
+def test_the_save_check_is_told_what_the_agent_means_to_do():
+    import asyncio
+
+    agent, taps = _save_agent("OK")
+    seen = []
+    chat = agent.actor.chat
+
+    async def spy(system, text, image=None, max_tokens=2000, temperature=0):
+        seen.append(system)
+        return await chat(system, text, image, max_tokens, temperature)
+
+    agent.actor.chat = spy
+
+    async def next_actions():
+        return [{"action": "tap", "x": 905, "y": 97, "thought": "I tap + to add an alarm", "_shot": b""}]
+
+    agent._next_actions = next_actions
+    asyncio.run(agent._step())
+    assert "I tap + to add an alarm" in seen[0] and "only opens or goes to another screen" in seen[0]
