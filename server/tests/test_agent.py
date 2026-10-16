@@ -59,7 +59,7 @@ def test_actor_may_not_repeat_a_move_that_changed_nothing():
     from hidagent.debug import Trace
 
     class Screen:
-        live, frame, aspect = True, b"jpeg", 0.46
+        live, frame, aspect, size = True, b"jpeg", 0.46, (498, 1080)
 
     class Actor:
         model = "fake"
@@ -75,6 +75,7 @@ def test_actor_may_not_repeat_a_move_that_changed_nothing():
     acts = asyncio.run(agent._next_actions())
     assert acts[0]["action"] == "tap"
     assert "changed nothing" in actor.prompts[1]
+    assert "498x1080 pixels" in actor.prompts[0]  # the actor is told the scale so it does not answer in pixels
 
 
 def test_repeating_a_move_that_keeps_changing_the_screen_is_not_stuck():

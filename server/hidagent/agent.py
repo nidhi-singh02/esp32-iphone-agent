@@ -265,6 +265,9 @@ class Agent:
                             + effect.get(s.get("changed"), "")
                             for s in self.steps[-8:] if "plan" not in s) or "(none)"
         prompt = f"Goal: {self.task}\n\nPlan:\n{self.plan}\n\nRecent actions:\n{history}\n\nNext action?"
+        if size := self.screen.size:  # some models answer in pixels unless told the scale
+            prompt += (f"\n\nThe screenshot is {size[0]}x{size[1]} pixels. Do NOT answer in pixels: "
+                       f"convert to 0-1000 (x = pixel_x / {size[0]} * 1000, y = pixel_y / {size[1]} * 1000).")
         for attempt in range(3):  # retry unparseable replies, a little less deterministically
             reply, seconds, frame = await self._ask("actor", self.actor, ACTOR_PROMPT, prompt, 0.4 * attempt)
             try:

@@ -23,13 +23,19 @@ class Frames:
         self.updated = 0.0
 
     @property
-    def aspect(self) -> float:
-        """Frame width / height, read from the JPEG header (portrait iPhone as a fallback)."""
+    def size(self) -> tuple[int, int] | None:
+        """Frame (width, height) in pixels, read from the JPEG header; None without a baseline frame."""
         f = self.frame or b""
         i = f.find(b"\xff\xc0")  # baseline start-of-frame: ... height(2) width(2)
         if i < 0 or len(f) < i + 9:
-            return 9 / 19.5
-        return int.from_bytes(f[i + 7:i + 9], "big") / int.from_bytes(f[i + 5:i + 7], "big")
+            return None
+        return int.from_bytes(f[i + 7:i + 9], "big"), int.from_bytes(f[i + 5:i + 7], "big")
+
+    @property
+    def aspect(self) -> float:
+        """Frame width / height (portrait iPhone as a fallback)."""
+        size = self.size
+        return size[0] / size[1] if size else 9 / 19.5
 
     async def settled(self, quiet: float = 0.35, least: float = 0.25, most: float = 4) -> None:
         """Wait until the screen stops changing (AirPlay only sends frames on change)."""
