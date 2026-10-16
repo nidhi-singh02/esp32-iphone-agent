@@ -215,6 +215,7 @@ def test_actor_prompt_matches_how_the_phone_behaves():
 
     assert "keyboard may stay hidden" in ACTOR_PROMPT
     assert "only scrolls it one row" in ACTOR_PROMPT
+    assert "unpredictable number of rows" in ACTOR_PROMPT and "read the new value" in ACTOR_PROMPT
     assert "visibly focused (the keyboard is showing)" not in ACTOR_PROMPT
 
 
