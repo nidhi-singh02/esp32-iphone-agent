@@ -67,6 +67,7 @@ THINK: My last tap opened the home screen as intended. The App Store icon is vis
 DO: tap 152 362"""
 
 LOOP_LIMIT = 3  # the same action this many times in the last few moves is a loop, not progress
+TAP_TOLERANCE = 25  # 0-1000 units (2.5% of the screen): taps this close are the same target
 META = ("t", "thought", "thought_zh", "think_s", "act_s", "shot", "_shot", "changed")  # not part of the action
 
 # action name -> argument names; numeric arguments are 0-1000 screen coordinates
@@ -118,6 +119,13 @@ def parse_plan(text: str) -> tuple[str, str]:
 def _key(step: dict) -> dict:
     """The action itself, without thoughts, timings and other bookkeeping."""
     return {k: v for k, v in step.items() if k not in META}
+
+
+def _same(a: dict, b: dict) -> bool:
+    """Same action; taps count as the same when they are within TAP_TOLERANCE of each other (model jitter)."""
+    if a.get("action") == "tap" == b.get("action"):
+        return abs(a["x"] - b["x"]) <= TAP_TOLERANCE and abs(a["y"] - b["y"]) <= TAP_TOLERANCE
+    return _key(a) == _key(b)
 
 
 class BlindError(RuntimeError):
@@ -256,7 +264,7 @@ class Agent:
         if act["action"] in ("home", "back", "wait", "replan", "done", "fail"):
             return 0
         moves = [s for s in self.steps if "plan" not in s][-window:]
-        return sum(_key(m) == _key(act) for m in moves)
+        return sum(_same(m, act) for m in moves)
 
     async def _replan(self, stuck: bool = False) -> None:
         prompt = f"Goal: {self.task}"

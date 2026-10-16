@@ -106,3 +106,17 @@ def test_alternating_tap_and_home_is_a_loop():
     assert agent._tried(dict(tap)) == 2  # a third try is refused
     assert agent._tried({"action": "home"}) == 0
     assert agent._tried({"action": "tap", "x": 500, "y": 820}) == 0
+
+
+def test_taps_a_few_units_apart_count_as_the_same_tap():
+    from hidagent.agent import Agent
+    from hidagent.debug import Trace
+
+    agent = Agent(phone=None, screen=None, actor=None, planner=None, trace=Trace(None))
+    agent.steps = [{"action": "tap", "x": 502, "y": 821, "changed": True},
+                   {"action": "tap", "x": 498, "y": 821, "changed": True, "precise": True}]
+    assert agent._tried({"action": "tap", "x": 500, "y": 821}) == 2
+    assert agent._tried({"action": "tap", "x": 500, "y": 880}) == 0  # a different target
+    swipe = {"action": "swipe", "x1": 500, "y1": 800, "x2": 500, "y2": 400}
+    agent.steps = [{**swipe, "x2": 505, "changed": True}]
+    assert agent._tried(swipe) == 0  # swipes stay exact
