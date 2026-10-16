@@ -48,8 +48,9 @@ Time or number wheels (e.g. an alarm's time): swiping a wheel moves it an unpred
 a number you can see in the column jumps the wheel straight to that number. So: look at the column, tap the exact
 number you want if it is visible (the column shows about 3 rows above and below the middle). If it is not visible, tap
 the visible number nearest to it (this moves up to 3 rows at a time), then read the column again and tap again. Only
-swipe when you need a big jump, and then read the column before the next action. Keep one column per round, and check
-AM/PM at the end (the hour wheel also flips AM/PM when it passes 12).
+swipe when you need a big jump, and then read the column before the next action. Keep one column per round. A swipe
+on one column can also move its neighbours (the hour wheel flips AM/PM when it passes 12), so after every wheel action
+read ALL the columns again (hour, minutes, AM/PM) and fix any that moved, before you go on or save.
 Looking for an item in a list: scroll less than one screen at a time so nothing is skipped, and read every
 visible item. If you reached both ends of the list and the item is not there, stop with fail and name the
 closest options you saw; do not keep scrolling.

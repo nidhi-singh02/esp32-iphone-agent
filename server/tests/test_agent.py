@@ -288,3 +288,9 @@ def test_actor_prompt_stops_on_an_unrelated_screen():
 
     assert "fail <what you see>" in ACTOR_PROMPT
     assert "phone or video call" in ACTOR_PROMPT and "lock screen" in ACTOR_PROMPT
+
+
+def test_actor_prompt_rereads_every_wheel_column():
+    from hidagent.agent import ACTOR_PROMPT
+
+    assert "read ALL the columns again" in ACTOR_PROMPT and "neighbours" in ACTOR_PROMPT
