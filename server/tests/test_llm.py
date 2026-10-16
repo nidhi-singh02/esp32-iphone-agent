@@ -95,3 +95,36 @@ def test_rate_limit_is_waited_out(monkeypatch):
 
     llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
     assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait" and len(calls) == 3
+
+
+def test_daily_quota_fails_fast():
+    llm = LLM("http://test/v1", "gemini")
+    calls = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(429, text="Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    try:
+        asyncio.run(llm.chat("sys", "hi"))
+    except httpx.HTTPStatusError:
+        pass
+    assert len(calls) == 1
+
+
+def test_temperature_is_dropped_when_the_model_refuses_it():
+    llm = LLM("http://test/v1", "claude")
+    seen = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body)
+        if "temperature" in body:
+            return httpx.Response(400, json={"error": {"message": "`temperature` is deprecated for this model."}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "DO: wait"}}]})
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait"
+    asyncio.run(llm.chat("sys", "again"))
+    assert ["temperature" in b for b in seen] == [True, False, False]
