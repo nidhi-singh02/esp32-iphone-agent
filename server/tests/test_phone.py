@@ -93,3 +93,55 @@ def test_every_tap_starts_from_the_homed_pointer(tmp_path):
     homes = [i for i, c in enumerate(pointer.sent) if c == "home"]
     clicks = [i for i, c in enumerate(pointer.sent) if c == "click"]
     assert len(homes) == 3 and all(h < c for h, c in zip(homes, clicks))  # a home before each of the three clicks
+
+
+def _phone(tmp_path, screen):
+    import json
+
+    (tmp_path / "cal.json").write_text(json.dumps({"w": 136, "h": 329, "seen": {"x": [], "y": []}}))
+    pointer = Pointer(136, 329)
+    return Phone(pointer, tmp_path / "cal.json", screen), pointer
+
+
+def _jpeg(color):
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (498, 1080), color).save(out, "JPEG")
+    return out.getvalue()
+
+
+class FakeScreen:
+    def __init__(self, before, after):
+        self.frame, self._after = before, after
+
+    async def fresh(self, since, timeout=0.8):
+        self.frame = self._after
+        return self.frame
+
+    async def settled(self, quiet=0.35, least=0.25, most=4):
+        pass
+
+
+def test_go_home_uses_cmd_h_and_stops_when_the_screen_changed(tmp_path):
+    phone, pointer = _phone(tmp_path, FakeScreen(_jpeg("white"), _jpeg("black")))
+    asyncio.run(phone.go_home())
+    assert pointer.sent == ["key cmd+h"]
+
+
+def test_go_home_swipes_from_the_bottom_edge_when_cmd_h_changed_nothing(tmp_path):
+    same = _jpeg("white")
+    phone, pointer = _phone(tmp_path, FakeScreen(same, same))
+    asyncio.run(phone.go_home())
+    assert pointer.sent[0] == "key cmd+h"
+    assert "press" in pointer.sent and "release" in pointer.sent and "home" in pointer.sent
+    first_move = next(c for c in pointer.sent if c.startswith("move"))
+    assert int(first_move.split()[2]) >= 320  # the pointer goes to the bottom edge (329 units is the full height)
+
+
+def test_go_home_without_a_screen_only_sends_cmd_h(tmp_path):
+    phone, pointer = _phone(tmp_path, None)
+    asyncio.run(phone.go_home())
+    assert pointer.sent == ["key cmd+h"]

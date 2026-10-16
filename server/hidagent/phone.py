@@ -229,7 +229,19 @@ class Phone:
         await self.device.send(f"key {combo}")
 
     async def go_home(self) -> None:
-        await self.swipe(0.5, 0.995, 0.5, 0.6, hold=False)  # resting here would open the app switcher
+        """Cmd+H goes to the home screen from any app and needs no pointer. If the screen does not change
+        (no hardware keyboard shortcut, or it was swallowed), swipe up from the bottom edge instead."""
+        before, sent = (self.screen.frame if self.screen is not None else None), time.time()
+        await self.device.send("key cmd+h")
+        if before is None:
+            return
+        if await self.screen.fresh(sent, 1.2):
+            await self.screen.settled(quiet=0.4, least=0.1, most=2)
+            if vision.changed(before, self.screen.frame):
+                return
+        log.info("cmd+h did not change the screen: swiping up from the bottom edge")
+        # y=1 puts the pointer on the bottom edge itself (the move is clamped there): the gesture needs the edge
+        await self.swipe(0.5, 1.0, 0.5, 0.6, hold=False)  # resting here would open the app switcher
 
     async def go_back(self) -> None:
         await self.swipe(0.005, 0.45, 0.6, 0.45, hold=False)
