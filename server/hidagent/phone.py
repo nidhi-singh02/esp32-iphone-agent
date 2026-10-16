@@ -28,6 +28,7 @@ HOLD = 0.25             # seconds to rest before lifting, so iOS adds no momentu
 TAP_GAP = 0.15          # seconds to stay still after a click, so iOS sees a finished tap, not the start of a drag
 NUDGE = 12              # mouse units the pointer is wiggled by to find it on screen
 AIM_TOLERANCE = 0.008   # screen fraction; a bigger miss is corrected before pressing
+LEARN_FROM_AIM = False  # fold what aim sees into the calibration line: off, one misread pointer bends the line
 MAX_MISS = 0.06         # bigger misses are still corrected, but not learned from (they may be misreadings)
 
 
@@ -149,7 +150,7 @@ class Phone:
             return
         fx, fy = found
         log.debug("aim (%.3f, %.3f): pointer at (%.3f, %.3f)", x, y, fx, fy)
-        if max(abs(fx - x), abs(fy - y)) <= MAX_MISS:  # learn from normal drift only, never from a stray reading
+        if LEARN_FROM_AIM and max(abs(fx - x), abs(fy - y)) <= MAX_MISS:  # normal drift only, never a stray reading
             self._seen["x"].append((self._fix(x, "x"), fx))
             self._seen["y"].append((self._fix(y, "y"), fy))
             self._save()

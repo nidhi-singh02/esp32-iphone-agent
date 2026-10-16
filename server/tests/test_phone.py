@@ -155,3 +155,29 @@ def test_search_goes_home_twice_opens_spotlight_and_types(tmp_path, monkeypatch)
     phone, pointer = _phone(tmp_path, None)
     asyncio.run(phone.search("Reminders"))
     assert pointer.sent == ["key cmd+h", "key cmd+h", "key cmd+space", "type Reminders"]
+
+
+def test_aim_corrects_the_tap_but_leaves_the_calibration_alone(tmp_path, monkeypatch):
+    import json
+
+    from hidagent import phone as phone_module
+
+    (tmp_path / "cal.json").write_text(json.dumps({"w": 145, "h": 332, "seen": {"x": [[0.3, 0.3], [0.6, 0.6]], "y": []}}))
+    pointer = Pointer(145, 332)
+
+    class Screen:
+        frame = b"x"
+
+        async def settled(self, **kw):
+            pass
+
+        async def fresh(self, since, timeout=0.8):
+            return self.frame
+
+    phone = Phone(pointer, tmp_path / "cal.json", Screen())
+    phone._pos = (0, 0)
+    monkeypatch.setattr(phone_module.vision, "pointer", lambda *a, **k: (0.55, 0.5))  # landed 0.05 right of the aim
+    asyncio.run(phone._aim(0.5, 0.5))
+    assert pointer.sent[-1].startswith("move -")  # this tap is corrected right away
+    assert list(phone._seen["x"]) == [(0.3, 0.3), (0.6, 0.6)] and not phone._seen["y"]
+    assert json.loads((tmp_path / "cal.json").read_text())["seen"]["x"] == [[0.3, 0.3], [0.6, 0.6]]
