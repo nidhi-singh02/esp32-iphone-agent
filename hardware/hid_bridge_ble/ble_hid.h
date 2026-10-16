@@ -66,9 +66,20 @@ class BleHid : public NimBLEServerCallbacks {
   }
   bool ready() const { return connected_ && secured_; }
 
+  // Mouse reports that notify() refused (the BLE queue was full) are retried: a lost report is a pointer that
+  // ends up short of where it was sent. sent/retried/dropped are read back by the "stats" command.
+  uint32_t sent = 0, retried = 0, dropped = 0;
+
   void mouseMove(int8_t x, int8_t y, int8_t wheel = 0, int8_t pan = 0) {
     uint8_t r[5] = {buttons_, (uint8_t)x, (uint8_t)y, (uint8_t)wheel, (uint8_t)pan};
-    if (ready()) { ms_->setValue(r, sizeof r); ms_->notify(); }
+    if (!ready()) return;
+    ms_->setValue(r, sizeof r);
+    for (int tries = 0; tries < 10; tries++) {
+      if (ms_->notify()) { sent++; return; }
+      retried++;
+      delay(2);
+    }
+    dropped++;
   }
   void mousePress(uint8_t b) { buttons_ |= b; mouseMove(0, 0); }
   void mouseRelease(uint8_t b) { buttons_ &= ~b; mouseMove(0, 0); }

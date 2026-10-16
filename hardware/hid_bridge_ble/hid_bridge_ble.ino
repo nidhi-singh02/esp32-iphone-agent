@@ -1,6 +1,6 @@
 // HID bridge over Bluetooth LE: an ESP32-C3 (or classic ESP32) that pairs with the iPhone as a
 // BLE mouse and keyboard and takes line commands over TCP (Wi-Fi). Same protocol as hid_bridge:
-//   ping | home | move <dx> <dy> | press | release | click
+//   ping | stats | tune <step> <step_ms> | home | move <dx> <dy> | press | release | click
 //   scroll <v> <h> | type <ascii text> | key <combo, e.g. cmd+h, enter>
 // The board answers "ok" or "err <why>"; "err ble not connected" when the phone is not paired/connected.
 
@@ -12,8 +12,8 @@
 #ifndef BLE_NAME
 #define BLE_NAME "iPhone Agent HID"
 #endif
-const int STEP = 10;      // max pointer delta per report while moving
-const int STEP_MS = 8;    // report interval; constant pace keeps iOS acceleration predictable (BLE conn interval 7.5-15 ms)
+int STEP = 10;      // max pointer delta per report while moving (the "tune" command changes it without reflashing)
+int STEP_MS = 8;    // report interval; constant pace keeps iOS acceleration predictable (BLE conn interval 7.5-15 ms)
 const int HOME_REPORTS = 50;
 #ifndef DEBUG_SERIAL
 #define DEBUG_SERIAL 0
@@ -79,6 +79,12 @@ String run(const String &line) {
   sscanf(arg.c_str(), "%ld %ld", &a, &b);
 
   if (cmd == "ping") return "ok";
+  if (cmd == "tune") {  // pointer step size (1-127 units) and pause between reports (1-100 ms), until the next reboot
+    if (a < 1 || a > 127 || b < 1 || b > 100) return "err tune <step 1-127> <step_ms 1-100>";
+    STEP = a; STEP_MS = b;
+    return "ok";
+  }
+  if (cmd == "stats") return "ok sent=" + String(hid.sent) + " retried=" + String(hid.retried) + " dropped=" + String(hid.dropped);
   if (!hid.ready()) return "err ble not connected";
   if (cmd == "home") {
     for (int i = 0; i < HOME_REPORTS; i++) { hid.mouseMove(-127, -127); delay(STEP_MS); }
