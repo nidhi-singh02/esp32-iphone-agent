@@ -120,3 +120,10 @@ def test_taps_a_few_units_apart_count_as_the_same_tap():
     swipe = {"action": "swipe", "x1": 500, "y1": 800, "x2": 500, "y2": 400}
     agent.steps = [{**swipe, "x2": 505, "changed": True}]
     assert agent._tried(swipe) == 0  # swipes stay exact
+
+
+def test_actor_prompt_asks_to_verify_before_done_and_not_to_duplicate():
+    from hidagent.agent import ACTOR_PROMPT
+
+    assert "Before done: open the place where the result should appear" in ACTOR_PROMPT
+    assert "Do not create the same thing twice" in ACTOR_PROMPT

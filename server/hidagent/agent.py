@@ -48,6 +48,10 @@ Looking for an item in a list: scroll less than one screen at a time so nothing 
 visible item. If you reached both ends of the list and the item is not there, stop with fail and name the
 closest options you saw; do not keep scrolling.
 Only tap things you can actually see on this screenshot; never guess where a button might be.
+Before done: open the place where the result should appear (the saved list, the alarm list, the note, the
+setting) and read it on screen. Say done only when you have seen the result there, not just after pressing save.
+Do not create the same thing twice. If you cannot find what you just created, first look in other views or lists
+(e.g. a reminder set for tomorrow is not in Today; look under Scheduled) before creating it again.
 If you are unsure what an element does, tap it alone (one DO line) and check the result next round.
 Actions:
   tap X Y [precise]         (precise: the pointer is located and corrected before tapping, about 1 s slower;
