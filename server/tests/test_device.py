@@ -39,3 +39,22 @@ def test_round_trip_with_a_fake_board():
         server.close()
 
     asyncio.run(scenario())
+
+
+def test_a_new_board_gets_the_pointer_pace_first():
+    from hidagent.device import STEP, STEP_MS
+
+    async def scenario():
+        device = Device()
+        server = await device.serve("127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        first = await asyncio.wait_for(reader.readline(), 3)  # the board says nothing, so the server skips "hello"
+        assert first == f"tune {STEP} {STEP_MS}\n".encode()
+        writer.write(b"ok\n")
+        await writer.drain()
+        assert await device.wait_connected(2)
+        writer.close()
+        server.close()
+
+    asyncio.run(scenario())

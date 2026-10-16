@@ -7,6 +7,12 @@ import time
 log = logging.getLogger(__name__)
 
 
+# Pointer pacing: 10 units per report, one report every 24 ms. Reports sent faster than the Bluetooth connection
+# interval get bunched up by the radio, and iOS then accelerates the pointer by a different amount every time (the
+# same move landed anywhere over 20% of the screen at 8 ms; at 24 ms it lands on the same pixel every time).
+STEP, STEP_MS = 10, 24
+
+
 class DeviceError(RuntimeError):
     pass
 
@@ -39,6 +45,10 @@ class Device:
         self.links += 1
         self._last = self._beat = time.time()  # fresh link: nothing to keep awake yet
         log.info("board connected from %s %s", writer.get_extra_info("peername"), hello)
+        try:
+            await self.send(f"tune {STEP} {STEP_MS}")  # firmware default is faster; older firmware has no tune
+        except DeviceError as e:
+            log.warning("could not set the pointer pace: %s", e)
 
     async def wait_connected(self, timeout: float) -> bool:
         deadline = time.time() + timeout
@@ -49,10 +59,10 @@ class Device:
     @staticmethod
     def _timeout(command: str) -> float:
         """Seconds the board may take: Wi-Fi replies need up to ~2 s at p99, moves are paced
-        (10 units per 8 ms), typing is per character."""
+        (STEP units per STEP_MS), typing is per character."""
         name, _, arg = command.partition(" ")
         if name == "move":
-            return 5 + max(abs(int(n)) for n in arg.split()) / 10 * 0.012
+            return 5 + max(abs(int(n)) for n in arg.split()) / STEP * (STEP_MS + 4) / 1000
         if name == "type":
             return 5 + 0.1 * len(arg)
         if name == "ping":
