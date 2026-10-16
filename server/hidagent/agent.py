@@ -36,8 +36,10 @@ Give ONE DO line when the next action depends on what this one opens or changes.
 Coordinates are integers 0-1000 relative to the screenshot (x left->right, y top->bottom).
 Aim at the visual center of the element you want, not its edge or its label.
 Look before you act: describe what is really on the screen now, not what you expect.
-Each recent action says whether the screen changed after it. If it did NOT change, the action
-missed or had no effect: do not assume it worked; aim again more precisely or try another way.
+Each recent action says whether the screen changed after it. This is only a hint: a popup or a fading widget
+counts as a change, and a small change (a wheel moving one row) can be missed. Always compare the screen with what
+you intended. If it did not do what you intended, the action missed or had no effect: do not assume it worked;
+aim again more precisely or try another way.
 Only type when a text field is visibly focused (the keyboard is showing).
 Swipes have no momentum: content moves exactly as far as the finger and stops. Prefer short swipes
 (100-250 units) and check the result; repeat if needed rather than one big swipe.
@@ -301,7 +303,8 @@ class Agent:
     async def _next_actions(self) -> list[dict]:
         # actions and their effect only: echoing earlier thoughts makes the model repeat them instead of looking
         hidden = ("t", "plan", "plan_zh", "think_s", "act_s", "shot", "thought", "thought_zh", "changed")
-        effect = {True: " -> screen changed", False: " -> screen did NOT change"}
+        effect = {True: " -> screen changed (check it is what you wanted)",
+                  False: " -> screen did NOT change much (small changes can be missed: check the screen)"}
         history = "\n".join(json.dumps({k: v for k, v in s.items() if k not in hidden})[:300]
                             + effect.get(s.get("changed"), "")
                             for s in self.steps[-8:] if "plan" not in s) or "(none)"

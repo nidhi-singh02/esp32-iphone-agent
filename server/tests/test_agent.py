@@ -194,3 +194,9 @@ def test_refused_repeats_become_a_stuck_error_not_an_empty_reply_error():
                    {"action": "tap", "x": 498, "y": 821, "changed": True}]
     with pytest.raises(StuckError, match="kept proposing"):
         asyncio.run(agent._next_actions())
+
+
+def test_actor_prompt_calls_the_change_signal_a_hint():
+    from hidagent.agent import ACTOR_PROMPT
+
+    assert "only a hint" in ACTOR_PROMPT
