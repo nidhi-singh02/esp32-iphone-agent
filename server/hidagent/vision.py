@@ -5,6 +5,17 @@ import io
 from PIL import Image, ImageChops
 
 
+def to_square(jpeg: bytes, side: int = 1000, quality: int = 85) -> bytes:
+    """The frame stretched to side x side, so a pixel position in it equals a 0-1000 coordinate on both axes.
+
+    Models often answer in pixels whatever the prompt says. A square of exactly the coordinate range makes the
+    pixel answer and the grid answer the same number. The stretch costs a little shape, not accuracy.
+    """
+    out = io.BytesIO()
+    Image.open(io.BytesIO(jpeg)).convert("RGB").resize((side, side), Image.BILINEAR).save(out, "JPEG", quality=quality)
+    return out.getvalue()
+
+
 def _gray(jpeg: bytes) -> Image.Image:
     return Image.open(io.BytesIO(jpeg)).convert("L")
 

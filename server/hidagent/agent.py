@@ -187,11 +187,13 @@ class Agent:
         log.info("agent: %s", step)
 
     async def _ask(self, role: str, llm: LLM, system: str, prompt: str,
-                   temperature: float = 0) -> tuple[str, float, bytes | None]:
+                   temperature: float = 0, square: bool = False) -> tuple[str, float, bytes | None]:
+        """square: send the actor a 1000x1000 picture, so pixel answers and 0-1000 answers are the same."""
         if not self.screen.live:  # never let the model act blind
             raise BlindError("lost the phone screen: reconnect Screen Mirroring")
         frame, started = self.screen.frame, time.time()
-        reply = await llm.chat(system, prompt, frame, temperature=temperature)
+        reply = await llm.chat(system, prompt, vision.to_square(frame) if square and frame else frame,
+                               temperature=temperature)
         seconds = round(time.time() - started, 2)
         self.trace.write(frame, kind="llm", role=role, model=llm.model, prompt=prompt,
                          reply=reply, seconds=seconds)
@@ -310,12 +312,11 @@ class Agent:
                             + effect.get(s.get("changed"), "")
                             for s in self.steps[-8:] if "plan" not in s) or "(none)"
         prompt = f"Goal: {self.task}\n\nPlan:\n{self.plan}\n\nRecent actions:\n{history}\n\nNext action?"
-        if size := self.screen.size:  # some models answer in pixels unless told the scale
-            prompt += (f"\n\nThe screenshot is {size[0]}x{size[1]} pixels. Do NOT answer in pixels: "
-                       f"convert to 0-1000 (x = pixel_x / {size[0]} * 1000, y = pixel_y / {size[1]} * 1000).")
+        prompt += ("\n\nThe screenshot is stretched to a 1000x1000 square. Give x and y as pixel positions in this "
+                   "picture (0 to 1000 on both axes).")
         refused = ""
         for attempt in range(3):  # retry unparseable replies, a little less deterministically
-            reply, seconds, frame = await self._ask("actor", self.actor, ACTOR_PROMPT, prompt, 0.4 * attempt)
+            reply, seconds, frame = await self._ask("actor", self.actor, ACTOR_PROMPT, prompt, 0.4 * attempt, square=True)
             try:
                 acts = parse_actions(reply)
             except ValueError as e:

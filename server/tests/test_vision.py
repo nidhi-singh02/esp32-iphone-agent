@@ -72,3 +72,18 @@ def test_pointer_far_from_the_target_is_found_with_a_full_screen_search():
     assert pointer(before, after, near=(0.9, 0.1), shift=12 / W) is None  # outside the window near the target
     found = pointer(before, after, near=(0.5, 0.5), shift=12 / W, reach=(0.5, 0.5))
     assert found[0] * W == pytest.approx(354, abs=3) and found[1] * H == pytest.approx(136, abs=3)
+
+
+def test_to_square_makes_pixel_positions_equal_grid_coordinates():
+    from PIL import Image
+
+    from hidagent.vision import to_square
+
+    buf = io.BytesIO()
+    img = Image.new("RGB", (498, 1080), "white")
+    img.paste((255, 0, 0), (0, 0, 498, 540))  # top half red
+    img.save(buf, "JPEG")
+    out = Image.open(io.BytesIO(to_square(buf.getvalue())))
+    assert out.size == (1000, 1000)
+    assert out.getpixel((500, 250))[0] > 200 and out.getpixel((500, 250))[1] < 80  # y=250 of 1000: red
+    assert out.getpixel((500, 750)) [1] > 200  # y=750 of 1000: white

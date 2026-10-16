@@ -1,8 +1,16 @@
+import io
 import math
 
 import pytest
+from PIL import Image
 
 from hidagent.agent import circle, parse_actions, parse_command, parse_plan
+
+
+def _jpeg() -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", (498, 1080), "white").save(out, "JPEG")
+    return out.getvalue()
 
 
 def test_parse_single_action():
@@ -59,7 +67,7 @@ def test_actor_may_not_repeat_a_move_that_changed_nothing():
     from hidagent.debug import Trace
 
     class Screen:
-        live, frame, aspect, size = True, b"jpeg", 0.46, (498, 1080)
+        live, frame, aspect, size = True, _jpeg(), 0.46, (498, 1080)
 
     class Actor:
         model = "fake"
@@ -75,7 +83,7 @@ def test_actor_may_not_repeat_a_move_that_changed_nothing():
     acts = asyncio.run(agent._next_actions())
     assert acts[0]["action"] == "tap"
     assert "changed nothing" in actor.prompts[1]
-    assert "498x1080 pixels" in actor.prompts[0]  # the actor is told the scale so it does not answer in pixels
+    assert "1000x1000 square" in actor.prompts[0]  # the actor sees a square, so pixel answers are grid answers
 
 
 def test_repeating_a_move_that_keeps_changing_the_screen_is_not_stuck():
@@ -180,7 +188,7 @@ def test_refused_repeats_become_a_stuck_error_not_an_empty_reply_error():
 
     class Screen:
         size = (498, 1080)
-        live, frame = True, b"jpeg"
+        live, frame = True, _jpeg()
 
     class Actor:
         model = "fake"
