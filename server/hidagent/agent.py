@@ -44,11 +44,12 @@ Only type when a text field is focused: a blinking cursor in it. The on-screen k
 the phone has a Bluetooth keyboard, so do not wait for it.
 Swipes have no momentum: content moves exactly as far as the finger and stops. Prefer short swipes
 (100-250 units) and check the result; repeat if needed rather than one big swipe.
-Time or number wheels (e.g. an alarm's time): a tap on a wheel only scrolls it one row, it does not let you type,
-and a swipe moves it an unpredictable number of rows (often 2-5, and it keeps spinning a moment after you let go).
-So: look at the value now, swipe the column once with a SHORT swipe (about 60-100 units), then read the new value
-before you do anything else. Work out how many rows are left and which way, and correct with another short swipe.
-Never repeat the same swipe blindly, never swipe two columns in one round, and check AM/PM at the end.
+Time or number wheels (e.g. an alarm's time): swiping a wheel moves it an unpredictable number of rows, but a TAP on
+a number you can see in the column jumps the wheel straight to that number. So: look at the column, tap the exact
+number you want if it is visible (the column shows about 3 rows above and below the middle). If it is not visible, tap
+the visible number nearest to it (this moves up to 3 rows at a time), then read the column again and tap again. Only
+swipe when you need a big jump, and then read the column before the next action. Keep one column per round, and check
+AM/PM at the end (the hour wheel also flips AM/PM when it passes 12).
 Looking for an item in a list: scroll less than one screen at a time so nothing is skipped, and read every
 visible item. If you reached both ends of the list and the item is not there, stop with fail and name the
 closest options you saw; do not keep scrolling.
