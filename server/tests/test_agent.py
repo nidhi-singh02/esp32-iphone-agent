@@ -93,3 +93,16 @@ def test_repeating_a_move_that_keeps_changing_the_screen_is_not_stuck():
 def test_precise_tap_flag():
     assert parse_command("tap 120 640 precise") == {"action": "tap", "x": 120, "y": 640, "precise": True}
     assert "precise" not in parse_command("tap 120 640")
+
+
+def test_alternating_tap_and_home_is_a_loop():
+    from hidagent.agent import Agent
+    from hidagent.debug import Trace
+
+    agent = Agent(phone=None, screen=None, actor=None, planner=None, trace=Trace(None))
+    tap = {"action": "tap", "x": 250, "y": 887}
+    agent.steps = [{**tap, "changed": True}, {"action": "home", "changed": True}, {**tap, "changed": True},
+                   {"action": "home", "changed": True}]
+    assert agent._tried(dict(tap)) == 2  # a third try is refused
+    assert agent._tried({"action": "home"}) == 0
+    assert agent._tried({"action": "tap", "x": 500, "y": 820}) == 0

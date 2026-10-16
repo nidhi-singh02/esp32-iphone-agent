@@ -66,6 +66,7 @@ Example:
 THINK: My last tap opened the home screen as intended. The App Store icon is visible, so I tap it.
 DO: tap 152 362"""
 
+LOOP_LIMIT = 3  # the same action this many times in the last few moves is a loop, not progress
 META = ("t", "thought", "thought_zh", "think_s", "act_s", "shot", "_shot", "changed")  # not part of the action
 
 # action name -> argument names; numeric arguments are 0-1000 screen coordinates
@@ -246,6 +247,17 @@ class Agent:
         return (len(moves) == limit - 1 and all(_key(m) == _key(act) for m in moves)
                 and moves[-1].get("changed") is not True)
 
+    def _tried(self, act: dict, window: int = 8) -> int:
+        """How often this exact pointer action ran in the last few moves, whatever the screen did.
+
+        Catches loops like tap A, home, tap A, home, where each tap changes the screen (it opens the wrong
+        app) so _repeating never sees two equal moves in a row.
+        """
+        if act["action"] in ("home", "back", "wait", "replan", "done", "fail"):
+            return 0
+        moves = [s for s in self.steps if "plan" not in s][-window:]
+        return sum(_key(m) == _key(act) for m in moves)
+
     async def _replan(self, stuck: bool = False) -> None:
         prompt = f"Goal: {self.task}"
         if stuck:
@@ -279,6 +291,11 @@ class Agent:
                 log.info("actor repeated an action that changed nothing; asking for another")
                 prompt += (f"\n\nYou just proposed {json.dumps(_key(acts[0]))} again, but it changed nothing last "
                            "time. Choose a different action (another position, a shorter swipe, or another way).")
+                continue
+            if (n := self._tried(acts[0])) >= LOOP_LIMIT - 1:  # same action again and again, even if it "worked"
+                log.info("actor proposed %s for the %d. time; asking for another", _key(acts[0]), n + 1)
+                prompt += (f"\n\nYou already did {json.dumps(_key(acts[0]))} {n} times in the last few moves and it did "
+                           "not get you where you wanted. Do not do it again: pick another target or another way.")
                 continue
             acts[0]["think_s"] = seconds
             return [{**a, "_shot": frame} for a in acts]  # every action is drawn on the same screenshot
