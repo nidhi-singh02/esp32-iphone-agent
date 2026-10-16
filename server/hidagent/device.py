@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 # interval get bunched up by the radio, and iOS then accelerates the pointer by a different amount every time (the
 # same move landed anywhere over 20% of the screen at 8 ms; at 24 ms it lands on the same pixel every time).
 STEP, STEP_MS = 10, 24
+HOME_STEP_MS = 2  # homing only has to reach the corner, so it can run at full speed (the board paces it by STEP_MS)
 
 
 class DeviceError(RuntimeError):
@@ -24,6 +25,7 @@ class Device:
         self._reader = self._writer = None
         self._lock = asyncio.Lock()
         self._last = self._beat = 0.0
+        self._tunable = False  # the board takes the "tune" command (newer firmware)
         self.links = 0  # bumped on every (re)connect, so gestures know to release and re-home
 
     @property
@@ -45,8 +47,10 @@ class Device:
         self.links += 1
         self._last = self._beat = time.time()  # fresh link: nothing to keep awake yet
         log.info("board connected from %s %s", writer.get_extra_info("peername"), hello)
+        self._tunable = False
         try:
             await self.send(f"tune {STEP} {STEP_MS}")  # firmware default is faster; older firmware has no tune
+            self._tunable = True
         except DeviceError as e:
             log.warning("could not set the pointer pace: %s", e)
 
@@ -70,6 +74,17 @@ class Device:
         return 5
 
     async def send(self, command: str) -> None:
+        if command == "home" and self._tunable:  # about 1.2 s at the move pace, 0.1 s at full speed
+            await self._send(f"tune {STEP} {HOME_STEP_MS}")
+            try:
+                await self._send("home")
+            finally:
+                if self.connected:
+                    await self._send(f"tune {STEP} {STEP_MS}")
+            return
+        await self._send(command)
+
+    async def _send(self, command: str) -> None:
         if not self.connected:
             raise DeviceError("board not connected")
         timeout = self._timeout(command)

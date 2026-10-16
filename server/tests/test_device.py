@@ -58,3 +58,32 @@ def test_a_new_board_gets_the_pointer_pace_first():
         server.close()
 
     asyncio.run(scenario())
+
+
+def test_home_runs_at_full_speed_and_then_restores_the_move_pace():
+    from hidagent.device import HOME_STEP_MS, STEP, STEP_MS
+
+    async def scenario():
+        device = Device()
+        server = await device.serve("127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        got = []
+
+        async def board():
+            while line := await reader.readline():
+                got.append(line.decode().strip())
+                writer.write(b"ok\n")
+                await writer.drain()
+
+        task = asyncio.create_task(board())
+        assert await device.wait_connected(2)
+        await asyncio.sleep(0.1)
+        got.clear()
+        await device.send("home")
+        assert got == [f"tune {STEP} {HOME_STEP_MS}", "home", f"tune {STEP} {STEP_MS}"]
+        task.cancel()
+        writer.close()
+        server.close()
+
+    asyncio.run(scenario())
