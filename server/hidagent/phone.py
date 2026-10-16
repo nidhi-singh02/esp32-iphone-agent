@@ -225,6 +225,19 @@ class Phone:
     async def type(self, text: str) -> None:
         await self.device.send(f"type {text}")
 
+    async def search(self, text: str) -> None:
+        """Open Spotlight from anywhere and type `text`: Cmd+H twice reaches a clean home screen (the second one
+        closes a Spotlight the first left open), Cmd+Space opens Spotlight with the last query selected, so typing
+        replaces it. No pointer is used, so no tap can miss the Search pill or hit the microphone."""
+        await self.device.send("key cmd+h")
+        await asyncio.sleep(0.6)
+        await self.device.send("key cmd+h")
+        await asyncio.sleep(0.6)
+        await self.device.send("key cmd+space")
+        await asyncio.sleep(0.8)
+        await self.device.send(f"type {text}")
+        await asyncio.sleep(1.0)  # let the results catch up with the typing
+
     async def key(self, combo: str) -> None:
         await self.device.send(f"key {combo}")
 

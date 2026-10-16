@@ -20,8 +20,8 @@ PLANNER_PROMPT = """You plan tasks on an iPhone. Given the goal and the current 
 write a short numbered plan (at most 6 steps) of what to do on screen. Plain text only, in English.
 Plan only what the goal needs, from what you can see; never invent accounts, emails, logins or
 screens you have not seen. Later steps can stay general (e.g. "Draw the face on the canvas").
-To open an app, prefer search over paging through home screens: tap the "Search" pill above
-the dock (or swipe down from the middle of the home screen), type the app name, tap the result."""
+To open an app, use search, not the home screens: the action "search NAME" opens Spotlight and types the name,
+then tap the app under "Top Hit"."""
 
 ACTOR_PROMPT = """You operate an iPhone through a mouse pointer. You see the current screen.
 Reply in this format, nothing else:
@@ -65,6 +65,8 @@ Actions:
   swipe X1 Y1 X2 Y2         (finger moves from X1,Y1 to X2,Y2: "swipe down" means Y2 > Y1)
   path X1 Y1 X2 Y2 X3 Y3 …  (one continuous stroke through 2-20 points, for drawing)
   circle X Y R              (draw a circle centered at X Y; R is the radius in x units)
+  search NAME               (open Spotlight and type NAME; then tap the app under "Top Hit". Use it to open any app,
+                             also from inside another app. Do not tap the Search pill, and never tap the microphone)
   type TEXT                 (ASCII only; tap the input field first)
   key COMBO                 (enter, backspace, esc, cmd+a, ...)
   home | back | wait
@@ -84,7 +86,7 @@ META = ("t", "thought", "thought_zh", "think_s", "act_s", "shot", "_shot", "chan
 
 # action name -> argument names; numeric arguments are 0-1000 screen coordinates
 ACTIONS = {"tap": ("x", "y"), "swipe": ("x1", "y1", "x2", "y2"), "circle": ("x", "y", "r"), "path": ("points",),
-           "type": ("text",), "key": ("combo",), "done": ("answer",), "fail": ("reason",),
+           "type": ("text",), "search": ("text",), "key": ("combo",), "done": ("answer",), "fail": ("reason",),
            "home": (), "back": (), "wait": (), "replan": ()}
 TEXT_ARGS = ("text", "combo", "answer", "reason")
 
@@ -360,6 +362,7 @@ class Agent:
             case "path": await self.phone.drag([(x / 1000, y / 1000) for x, y in a["points"]])
             case "circle": await self.phone.drag(circle(p("x"), p("y"), p("r"), self.screen.aspect))
             case "type": await self.phone.type(a["text"])
+            case "search": await self.phone.search(a["text"])
             case "key": await self.phone.key(a["combo"])
             case "home": await self.phone.go_home()
             case "back": await self.phone.go_back()

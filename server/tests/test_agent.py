@@ -243,3 +243,10 @@ def test_an_empty_actor_reply_is_asked_again_without_using_up_an_attempt():
     agent = Agent(phone=None, screen=Screen(), actor=actor, planner=None, trace=Trace(None))
     assert asyncio.run(agent._next_actions())[0]["action"] == "wait"
     assert actor.calls == [0, 0]  # the second ask kept the same temperature: it was not a new attempt
+
+
+def test_search_action_is_parsed_and_described():
+    from hidagent.agent import ACTOR_PROMPT, PLANNER_PROMPT
+
+    assert parse_command("search Reminders") == {"action": "search", "text": "Reminders"}
+    assert "search NAME" in ACTOR_PROMPT and "search NAME" in PLANNER_PROMPT

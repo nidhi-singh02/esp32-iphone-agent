@@ -145,3 +145,13 @@ def test_go_home_without_a_screen_only_sends_cmd_h(tmp_path):
     phone, pointer = _phone(tmp_path, None)
     asyncio.run(phone.go_home())
     assert pointer.sent == ["key cmd+h"]
+
+
+def test_search_goes_home_twice_opens_spotlight_and_types(tmp_path, monkeypatch):
+    async def no_sleep(_):
+        pass
+
+    monkeypatch.setattr("hidagent.phone.asyncio.sleep", no_sleep)
+    phone, pointer = _phone(tmp_path, None)
+    asyncio.run(phone.search("Reminders"))
+    assert pointer.sent == ["key cmd+h", "key cmd+h", "key cmd+space", "type Reminders"]
