@@ -59,6 +59,9 @@ setting) and read it on screen. Say done only when you have seen the result ther
 Do not create the same thing twice. If you cannot find what you just created, first look in other views or lists
 (e.g. a reminder set for tomorrow is not in Today; look under Scheduled) before creating it again.
 If you are unsure what an element does, tap it alone (one DO line) and check the result next round.
+After you tap Save, Done, the checkmark, Add, Close or Back, the screen changes under you: give that tap alone, then
+look at the new screen before doing anything else. Never tap the same button again just because the old screenshot
+still shows it; read the new screen first.
 Actions:
   tap X Y [precise]         (precise: the pointer is located and corrected before tapping, about 1 s slower;
                              use it for small or tightly packed targets: list rows, checkmarks, toggles, small icons)
@@ -79,6 +82,7 @@ THINK: My last tap opened the home screen as intended. The App Store icon is vis
 DO: tap 152 362"""
 
 LOOP_LIMIT = 3  # the same action this many times in the last few moves is a loop, not progress
+TOP_BAR = 130        # 0-1000: a tap this high is a title-bar button (Save, Done, back, close): the screen changes under it
 FRESH_WAIT = 1.2    # seconds to wait for the first frame after an action (taps that change nothing cost this much)
 SETTLE_QUIET = 0.5  # seconds without a new frame before the screen counts as settled after an action
 TAP_TOLERANCE = 25  # 0-1000 units (2.5% of the screen): taps this close are the same target
@@ -252,6 +256,9 @@ class Agent:
             self._record(act.pop("_shot"), **act)
             if name in ("done", "fail"):
                 return True
+            if name == "tap" and act["y"] <= TOP_BAR and i < len(acts) - 1:
+                log.info("tap on a title-bar button: the actions after it were planned on the old screen, skipped")
+                break
             following = acts[i + 1]["action"] if i < len(acts) - 1 else None
             if name == "tap" and following in ("type", "key"):  # typing into a field that a missed tap never opened
                 await self.screen.settled()

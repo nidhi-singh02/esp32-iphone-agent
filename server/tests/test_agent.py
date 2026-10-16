@@ -250,3 +250,34 @@ def test_search_action_is_parsed_and_described():
 
     assert parse_command("search Reminders") == {"action": "search", "text": "Reminders"}
     assert "search NAME" in ACTOR_PROMPT and "search NAME" in PLANNER_PROMPT
+
+
+def test_a_title_bar_tap_ends_the_batch():
+    import asyncio
+
+    from hidagent.agent import Agent
+    from hidagent.debug import Trace
+
+    taps = []
+
+    class Phone:
+        async def tap(self, x, y, aim=False):
+            taps.append((x, y))
+
+    class Screen:
+        live, frame, size, aspect = True, _jpeg(), (498, 1080), 0.46
+
+        async def fresh(self, since, timeout=0.8):
+            return self.frame
+
+        async def settled(self, quiet=0.35, least=0.25, most=4):
+            pass
+
+    agent = Agent(phone=Phone(), screen=Screen(), actor=None, planner=None, trace=Trace(None))
+
+    async def next_actions():
+        return [{"action": "tap", "x": 905, "y": 115, "_shot": b""}, {"action": "tap", "x": 500, "y": 500, "_shot": b""}]
+
+    agent._next_actions = next_actions
+    asyncio.run(agent._step())
+    assert taps == [(0.905, 0.115)]  # the second tap was planned on the screen the first one closes
