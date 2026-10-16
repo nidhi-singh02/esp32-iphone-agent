@@ -294,3 +294,58 @@ def test_actor_prompt_rereads_every_wheel_column():
     from hidagent.agent import ACTOR_PROMPT
 
     assert "read ALL the columns again" in ACTOR_PROMPT and "neighbours" in ACTOR_PROMPT
+
+
+def _save_agent(verdict):
+    from hidagent.agent import Agent
+    from hidagent.debug import Trace
+
+    taps = []
+
+    class Phone:
+        async def tap(self, x, y, aim=False):
+            taps.append((x, y))
+
+    class Screen:
+        live, frame, size, aspect = True, _jpeg(), (498, 1080), 0.46
+
+        async def fresh(self, since, timeout=0.8):
+            return self.frame
+
+        async def settled(self, quiet=0.35, least=0.25, most=4):
+            pass
+
+    class Actor:
+        model = "fake"
+
+        async def chat(self, system, text, image=None, max_tokens=2000, temperature=0):
+            return verdict
+
+    agent = Agent(phone=Phone(), screen=Screen(), actor=Actor(), planner=None, trace=Trace(None))
+    agent.task = "set an alarm for 7 AM"
+
+    async def next_actions():
+        return [{"action": "tap", "x": 905, "y": 97, "_shot": b""}]
+
+    agent._next_actions = next_actions
+    return agent, taps
+
+
+def test_save_is_not_tapped_while_the_screen_shows_the_wrong_value():
+    import asyncio
+
+    agent, taps = _save_agent("WRONG: the screen shows 9:02 PM, the goal needs 7:00 AM")
+    assert asyncio.run(agent._step()) is False
+    assert taps == []
+    assert agent.steps[-1]["action"] == "blocked" and "9:02 PM" in agent.steps[-1]["reason"]
+
+
+def test_save_is_tapped_when_the_check_says_ok_or_cannot_run():
+    import asyncio
+
+    agent, taps = _save_agent("OK")
+    asyncio.run(agent._step())
+    assert taps == [(0.905, 0.097)]
+    agent, taps = _save_agent("")  # nothing useful back: do not hold up a task that is going well
+    asyncio.run(agent._step())
+    assert taps == [(0.905, 0.097)]
