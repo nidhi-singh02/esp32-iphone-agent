@@ -281,3 +281,10 @@ def test_a_title_bar_tap_ends_the_batch():
     agent._next_actions = next_actions
     asyncio.run(agent._step())
     assert taps == [(0.905, 0.115)]  # the second tap was planned on the screen the first one closes
+
+
+def test_actor_prompt_stops_on_an_unrelated_screen():
+    from hidagent.agent import ACTOR_PROMPT
+
+    assert "fail <what you see>" in ACTOR_PROMPT
+    assert "phone or video call" in ACTOR_PROMPT and "lock screen" in ACTOR_PROMPT

@@ -58,6 +58,9 @@ Before done: open the place where the result should appear (the saved list, the 
 setting) and read it on screen. Say done only when you have seen the result there, not just after pressing save.
 Do not create the same thing twice. If you cannot find what you just created, first look in other views or lists
 (e.g. a reminder set for tomorrow is not in Today; look under Scheduled) before creating it again.
+If the screen shows something that has nothing to do with your task and that you did not open yourself (an
+incoming or active phone or video call, FaceTime, the lock screen, a permission or system alert, an app you never
+opened), stop at once with: fail <what you see>. Do not tap anything on that screen and do not try to find your way back.
 If you are unsure what an element does, tap it alone (one DO line) and check the result next round.
 After you tap Save, Done, the checkmark, Add, Close or Back, the screen changes under you: give that tap alone, then
 look at the new screen before doing anything else. Never tap the same button again just because the old screenshot
