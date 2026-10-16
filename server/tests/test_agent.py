@@ -170,3 +170,27 @@ def test_a_repeated_tap_is_aimed_even_when_the_screen_changed():
     asyncio.run(agent._do({"action": "tap", "x": 500, "y": 821}))
     asyncio.run(agent._do({"action": "tap", "x": 500, "y": 300}))  # a new target is not aimed
     assert taps == [False, True, False]
+
+
+def test_refused_repeats_become_a_stuck_error_not_an_empty_reply_error():
+    import asyncio
+
+    from hidagent.agent import Agent, StuckError
+    from hidagent.debug import Trace
+
+    class Screen:
+        size = (498, 1080)
+        live, frame = True, b"jpeg"
+
+    class Actor:
+        model = "fake"
+
+        async def chat(self, system, text, image=None, max_tokens=600, temperature=0):
+            return "THINK: again\nDO: tap 500 821"
+
+    agent = Agent(phone=None, screen=Screen(), actor=Actor(), planner=None, trace=Trace(None))
+    agent.steps = [{"action": "tap", "x": 502, "y": 821, "changed": True},
+                   {"action": "home", "changed": True},
+                   {"action": "tap", "x": 498, "y": 821, "changed": True}]
+    with pytest.raises(StuckError, match="kept proposing"):
+        asyncio.run(agent._next_actions())

@@ -134,6 +134,10 @@ def _same(a: dict, b: dict) -> bool:
     return _key(a) == _key(b)
 
 
+class StuckError(RuntimeError):
+    """The actor keeps proposing an action that already failed to help; the plan needs another way."""
+
+
 class BlindError(RuntimeError):
     """The screen feed is gone; acting now would be guessing."""
 
@@ -202,7 +206,7 @@ class Agent:
                 except BlindError:
                     raise
                 except Exception as e:  # a bad reply or a dropped link: recover, don't crash
-                    self._record(action="hiccup", reason=str(e)[:300])
+                    self._record(action="stuck" if isinstance(e, StuckError) else "hiccup", reason=str(e)[:300])
                     board_drop = isinstance(e, DeviceError) and await self.phone.device.wait_connected(15)
                     failures += 0 if board_drop else 1  # the board came back: not the agent's fault
                     if failures >= self.max_failures:
@@ -305,6 +309,7 @@ class Agent:
         if size := self.screen.size:  # some models answer in pixels unless told the scale
             prompt += (f"\n\nThe screenshot is {size[0]}x{size[1]} pixels. Do NOT answer in pixels: "
                        f"convert to 0-1000 (x = pixel_x / {size[0]} * 1000, y = pixel_y / {size[1]} * 1000).")
+        refused = ""
         for attempt in range(3):  # retry unparseable replies, a little less deterministically
             reply, seconds, frame = await self._ask("actor", self.actor, ACTOR_PROMPT, prompt, 0.4 * attempt)
             try:
@@ -314,17 +319,21 @@ class Agent:
                 continue
             if self._missed() and _key(acts[0]) == _key(self.steps[-1]):  # same move that just did nothing
                 log.info("actor repeated an action that changed nothing; asking for another")
+                refused = f"{json.dumps(_key(acts[0]))} again after it changed nothing"
                 prompt += (f"\n\nYou just proposed {json.dumps(_key(acts[0]))} again, but it changed nothing last "
                            "time. Choose a different action (another position, a shorter swipe, or another way).")
                 continue
             if (n := self._tried(acts[0])) >= LOOP_LIMIT - 1:  # same action again and again, even if it "worked"
                 log.info("actor proposed %s for the %d. time; asking for another", _key(acts[0]), n + 1)
+                refused = f"{json.dumps(_key(acts[0]))} for the {n + 1}. time"
                 prompt += (f"\n\nYou already did {json.dumps(_key(acts[0]))} {n} times in the last few moves and it did "
                            "not get you where you wanted. Do not do it again: pick another target or another way.")
                 continue
             acts[0]["think_s"] = seconds
             return [{**a, "_shot": frame} for a in acts]  # every action is drawn on the same screenshot
-        raise ValueError(f"actor gave no valid action: {reply[:200]}")
+        if refused:
+            raise StuckError(f"the actor kept proposing {refused}; planning another way")
+        raise ValueError(f"actor gave no valid action: {reply[:200] or '(empty reply)'}")
 
     async def _do(self, a: dict) -> None:
         p = lambda k: a[k] / 1000  # noqa: E731
