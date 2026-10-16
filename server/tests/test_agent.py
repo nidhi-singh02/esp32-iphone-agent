@@ -150,3 +150,23 @@ def test_after_an_action_the_agent_waits_for_a_fresh_frame_then_for_quiet():
     calls.clear()
     asyncio.run(agent._screen_after(None))  # nothing was done (wait): no point waiting for a new frame
     assert calls == [("settled", 0.35)]
+
+
+def test_a_repeated_tap_is_aimed_even_when_the_screen_changed():
+    import asyncio
+
+    from hidagent.agent import Agent
+    from hidagent.debug import Trace
+
+    taps = []
+
+    class Phone:
+        async def tap(self, x, y, aim=False):
+            taps.append(aim)
+
+    agent = Agent(phone=Phone(), screen=None, actor=None, planner=None, trace=Trace(None))
+    asyncio.run(agent._do({"action": "tap", "x": 500, "y": 821}))
+    agent.steps = [{"action": "tap", "x": 502, "y": 821, "changed": True}]  # same spot, a widget faded in
+    asyncio.run(agent._do({"action": "tap", "x": 500, "y": 821}))
+    asyncio.run(agent._do({"action": "tap", "x": 500, "y": 300}))  # a new target is not aimed
+    assert taps == [False, True, False]

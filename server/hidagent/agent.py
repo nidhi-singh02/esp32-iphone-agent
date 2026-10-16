@@ -329,7 +329,11 @@ class Agent:
     async def _do(self, a: dict) -> None:
         p = lambda k: a[k] / 1000  # noqa: E731
         match a["action"]:
-            case "tap": await self.phone.tap(p("x"), p("y"), aim=a.get("precise", False) or self._missed())
+            case "tap":
+                # a tap at a spot already tried means the first one did not do what was wanted, whatever the
+                # screen change signal said (a fading widget counts as a change): find the pointer and correct it
+                aim = a.get("precise", False) or self._missed() or self._tried(a) >= 1
+                await self.phone.tap(p("x"), p("y"), aim=aim)
             case "swipe": await self.phone.swipe(p("x1"), p("y1"), p("x2"), p("y2"))
             case "path": await self.phone.drag([(x / 1000, y / 1000) for x, y in a["points"]])
             case "circle": await self.phone.drag(circle(p("x"), p("y"), p("r"), self.screen.aspect))
