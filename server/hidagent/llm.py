@@ -1,5 +1,6 @@
 """Minimal client for any OpenAI-compatible chat endpoint (vision models)."""
 
+import asyncio
 import base64
 import json
 import os
@@ -7,6 +8,7 @@ import os
 import httpx
 
 TOKEN_PARAMS = ("max_tokens", "max_completion_tokens")
+RATE_LIMIT_WAITS = (5, 15, 30)  # seconds to back off after a 429 (Retry-After wins), then give up
 
 
 class LLM:
@@ -34,9 +36,18 @@ class LLM:
             content.insert(0, {"type": "image_url", "image_url": {"url": url}})
         body = {"model": self.model, "temperature": temperature, **self.extra,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}]}
-        r = await self._http.post("/chat/completions", json={self.token_param: max_tokens, **body})
+        r = await self._post({self.token_param: max_tokens, **body})
         if r.status_code == 400 and self._auto and "max_completion_tokens" in r.text:
             self.token_param, self._auto = "max_completion_tokens", False
-            r = await self._http.post("/chat/completions", json={self.token_param: max_tokens, **body})
+            r = await self._post({self.token_param: max_tokens, **body})
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"] or ""
+
+    async def _post(self, payload: dict) -> httpx.Response:
+        """POST, waiting out rate limits (429) instead of failing the whole task."""
+        for wait in (*RATE_LIMIT_WAITS, None):
+            r = await self._http.post("/chat/completions", json=payload)
+            if r.status_code != 429 or wait is None:
+                return r
+            retry_after = r.headers.get("retry-after", "")
+            await asyncio.sleep(min(float(retry_after), 60) if retry_after.replace(".", "", 1).isdigit() else wait)

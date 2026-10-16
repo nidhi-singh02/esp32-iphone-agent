@@ -80,3 +80,18 @@ def test_extra_body_and_image_are_sent():
     body = seen[0]
     assert body["reasoning_effort"] == "none"
     assert body["messages"][1]["content"][0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+
+def test_rate_limit_is_waited_out(monkeypatch):
+    monkeypatch.setattr("hidagent.llm.RATE_LIMIT_WAITS", (0, 0))
+    llm = LLM("http://test/v1", "gemini")
+    calls = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) < 3:
+            return httpx.Response(429, headers={"retry-after": "0"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "DO: wait"}}]})
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait" and len(calls) == 3
