@@ -177,9 +177,11 @@ class Phone:
             await self.device.send("release")
             self._pos, self._link = None, self.device.links
         if self._pos is None or (rehome and self._moves >= REHOME_EVERY):
+            log.debug("pointer homed (believed %s, %d moves since the last home)", self._pos, self._moves)
             await self.device.send("home")
             self._pos, self._moves = (0, 0), 0
         x, y = self._pos
+        log.debug("pointer from %s to %s units", (x, y), (tx, ty))
         self._pos = None  # unknown until the move succeeds
         await self.device.send(f"move {tx - x} {ty - y}")
         self._pos, self._moves = (tx, ty), self._moves + 1
