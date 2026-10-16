@@ -18,8 +18,11 @@ from .device import Device
 
 log = logging.getLogger(__name__)
 
-CALIBRATION_MOVE = 200  # mouse units moved diagonally for a manual (one point) calibration; stays on screen
-CALIBRATION_STOPS = (150, 350)  # automatic calibration finds the pointer at these distances from the corner
+CALIBRATION_MOVE = 60   # mouse units moved diagonally for a manual (one point) calibration; stays on screen
+CALIBRATION_PROBES = (40, 25, 70)  # first stop of the automatic calibration: the first distance whose pointer is found
+CALIBRATION_REACH = 0.75  # the second stop goes to this fraction of the smaller span, so no axis hits the screen edge
+EDGE = 0.9              # a pointer found beyond this fraction of the screen may be stuck at the edge: not trusted
+SHIFT_GUESS = 0.04      # screen fraction a NUDGE is assumed to move the pointer before the span is known
 REHOME_EVERY = 10       # gestures between re-homing
 HOLD = 0.25             # seconds to rest before lifting, so iOS adds no momentum (the swipe stops where it ends)
 TAP_GAP = 0.15          # seconds to stay still after a click, so iOS sees a finished tap, not the start of a drag
@@ -50,27 +53,39 @@ class Phone:
         """Find the pointer on screen at two known distances from the corner and fit the mapping from both.
 
         Two points give the scale and the offset, which one point cannot (iOS pointer motion is not exactly
-        proportional). Returns True when it calibrated itself; otherwise the user clicks the pointer
-        (finish_calibration).
+        proportional). The stops are chosen from what the first one shows, so that neither axis reaches the
+        screen edge: a pointer stuck at the edge reads as a much larger span than the real one. Returns True
+        when it calibrated itself; otherwise the user clicks the pointer (finish_calibration).
         """
         self._pos = None
-        await self.device.send("home")
+        live = self.screen is not None and self.screen.live
         seen = []
-        for units in CALIBRATION_STOPS:
-            step = units - (seen[-1][0] if seen else 0)
-            await self.device.send(f"move {step} {step}")
-            found = await self._find_pointer() if self.screen is not None and self.screen.live else None
-            if not found:
+        for first in CALIBRATION_PROBES if live else ():
+            await self.device.send("home")
+            await self.device.send(f"move {first} {first}")
+            found = await self._find_pointer(SHIFT_GUESS)
+            if found and found[0] < EDGE and found[1] < EDGE:
+                seen.append((first, *found))
                 break
-            seen.append((units, *found))
+        if seen:
+            u1, x1, y1 = seen[0]
+            # the smaller span is the nearer edge: aim the second stop well inside it
+            u2 = max(round(CALIBRATION_REACH * min(u1 / x1, u1 / y1)), round(u1 * 1.4))
+            await self.device.send(f"move {u2 - u1} {u2 - u1}")
+            found = await self._find_pointer(SHIFT_GUESS)
+            if found and found[0] < EDGE and found[1] < EDGE and found[0] - x1 > 0.08 and found[1] - y1 > 0.03:
+                seen.append((u2, *found))
         if len(seen) < 2:
             log.info("calibration: pointer not found on screen, waiting for a click")
-            if not seen:
-                await self.device.send("home")
-                await self.device.send(f"move {CALIBRATION_MOVE} {CALIBRATION_MOVE}")
+            await self.device.send("home")
+            await self.device.send(f"move {CALIBRATION_MOVE} {CALIBRATION_MOVE}")
             return False
         (u1, x1, y1), (u2, x2, y2) = seen
         self.span = {"w": round((u2 - u1) / (x2 - x1)), "h": round((u2 - u1) / (y2 - y1))}
+        # the nudge moved the pointer by NUDGE / span, not the guessed fraction: that shifts every x reading
+        # by half the difference (a common shift, so it did not change the span)
+        bias = (SHIFT_GUESS - NUDGE / self.span["w"]) / 2
+        seen = [(u, x + bias, y) for u, x, y in seen]
         for samples in self._seen.values():
             samples.clear()
         for units, x, y in seen:  # where each stop landed, so moves are corrected for the offset too
@@ -80,8 +95,11 @@ class Phone:
         log.info("calibration: pointer at %s, span %s", [(round(x, 3), round(y, 3)) for _, x, y in seen], self.span)
         return True
 
-    async def _find_pointer(self) -> tuple[float, float] | None:
-        """Wiggle the pointer and find it anywhere on screen (the span may still be unknown)."""
+    async def _find_pointer(self, shift: float = 0.025) -> tuple[float, float] | None:
+        """Wiggle the pointer and find it anywhere on screen (the span may still be unknown).
+
+        shift: the screen fraction the wiggle moves the pointer by, as far as it is known.
+        """
         await self.screen.settled(quiet=0.2, least=0.3, most=1.5)
         before, sent = self.screen.frame, time.time()
         await self.device.send(f"move {NUDGE} 0")
@@ -90,7 +108,7 @@ class Phone:
             await self.screen.settled(quiet=0.15, least=0.1, most=0.6)
             after = self.screen.frame
         await self.device.send(f"move -{NUDGE} 0")
-        found = before and after and vision.pointer(before, after, (0.5, 0.5), 0.025, reach=(0.5, 0.5))
+        found = before and after and vision.pointer(before, after, (0.5, 0.5), shift, reach=(0.5, 0.5))
         return found if found and 0.03 < found[0] < 0.97 and 0.03 < found[1] < 0.97 else None
 
     def finish_calibration(self, x: float, y: float) -> None:
