@@ -216,3 +216,29 @@ def test_actor_prompt_matches_how_the_phone_behaves():
     assert "keyboard may stay hidden" in ACTOR_PROMPT
     assert "only scrolls it one row" in ACTOR_PROMPT
     assert "visibly focused (the keyboard is showing)" not in ACTOR_PROMPT
+
+
+def test_an_empty_actor_reply_is_asked_again_without_using_up_an_attempt():
+    import asyncio
+
+    from hidagent.agent import Agent
+    from hidagent.debug import Trace
+
+    class Screen:
+        size = (498, 1080)
+        live, frame = True, _jpeg()
+
+    class Actor:
+        model = "fake"
+
+        def __init__(self):
+            self.calls = []
+
+        async def chat(self, system, text, image=None, max_tokens=2000, temperature=0):
+            self.calls.append(temperature)
+            return "" if len(self.calls) == 1 else "THINK: ok\nDO: wait"
+
+    actor = Actor()
+    agent = Agent(phone=None, screen=Screen(), actor=actor, planner=None, trace=Trace(None))
+    assert asyncio.run(agent._next_actions())[0]["action"] == "wait"
+    assert actor.calls == [0, 0]  # the second ask kept the same temperature: it was not a new attempt

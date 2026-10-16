@@ -3,9 +3,12 @@
 import asyncio
 import base64
 import json
+import logging
 import os
 
 import httpx
+
+log = logging.getLogger(__name__)
 
 TOKEN_PARAMS = ("max_tokens", "max_completion_tokens")
 RATE_LIMIT_WAITS = (5, 15, 30)  # seconds to back off after a 429 (Retry-After wins), then give up
@@ -30,7 +33,7 @@ class LLM:
                    env("API_KEY"), json.loads(env("EXTRA_BODY", "{}")), env("TOKEN_PARAM", "auto"))
 
     async def chat(self, system: str, text: str, image: bytes | None = None,
-                   max_tokens: int = 600, temperature: float = 0) -> str:
+                   max_tokens: int = 2000, temperature: float = 0) -> str:
         content = [{"type": "text", "text": text}]
         if image:
             url = "data:image/jpeg;base64," + base64.b64encode(image).decode()
@@ -46,7 +49,10 @@ class LLM:
             body.pop("temperature", None)
             r = await self._post({self.token_param: max_tokens, **body})
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"] or ""
+        choice = r.json()["choices"][0]
+        if choice.get("finish_reason") == "length":  # hidden reasoning tokens count too: the reply may be empty or cut
+            log.warning("%s hit max_tokens=%d: the reply is cut off or empty", self.model, max_tokens)
+        return choice["message"]["content"] or ""
 
     async def _post(self, payload: dict) -> httpx.Response:
         """POST, waiting out rate limits (429) instead of failing the whole task."""

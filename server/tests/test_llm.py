@@ -25,7 +25,7 @@ def test_classic_servers_get_max_tokens_once():
     llm = LLM("http://test/v1", "qwen")
     seen = fake_server(llm, "max_tokens")
     assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait"
-    assert len(seen) == 1 and seen[0]["max_tokens"] == 600
+    assert len(seen) == 1 and seen[0]["max_tokens"] == 2000
 
 
 def test_auto_switches_to_max_completion_tokens_and_remembers():
@@ -52,7 +52,7 @@ def test_gemini_openai_endpoint_gets_max_tokens_and_a_jpeg():
     seen = fake_server(llm, "max_tokens")
     assert asyncio.run(llm.chat("sys", "what is on screen?", image=b"\xff\xd8\xff\xd9")) == "DO: wait"
     body = seen[0]
-    assert "max_completion_tokens" not in body and body["max_tokens"] == 600
+    assert "max_completion_tokens" not in body and body["max_tokens"] == 2000
     image = body["messages"][1]["content"][0]
     assert image["type"] == "image_url" and image["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
@@ -128,3 +128,15 @@ def test_temperature_is_dropped_when_the_model_refuses_it():
     assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait"
     asyncio.run(llm.chat("sys", "again"))
     assert ["temperature" in b for b in seen] == [True, False, False]
+
+
+def test_a_reply_cut_off_by_the_token_limit_is_logged(caplog):
+    llm = LLM("http://test/v1", "claude")
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": ""}}]})
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    with caplog.at_level("WARNING"):
+        assert asyncio.run(llm.chat("sys", "hi")) == ""
+    assert "hit max_tokens=2000" in caplog.text

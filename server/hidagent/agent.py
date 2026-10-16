@@ -316,7 +316,12 @@ class Agent:
                    "picture (0 to 1000 on both axes).")
         refused = ""
         for attempt in range(3):  # retry unparseable replies, a little less deterministically
-            reply, seconds, frame = await self._ask("actor", self.actor, ACTOR_PROMPT, prompt, 0.4 * attempt, square=True)
+            for _ in range(2):  # an empty reply is a glitch, not an answer: ask again at once, same attempt
+                reply, seconds, frame = await self._ask("actor", self.actor, ACTOR_PROMPT, prompt, 0.4 * attempt,
+                                                        square=True)
+                if reply.strip():
+                    break
+                log.warning("actor gave an empty reply; asking again")
             try:
                 acts = parse_actions(reply)
             except ValueError as e:
