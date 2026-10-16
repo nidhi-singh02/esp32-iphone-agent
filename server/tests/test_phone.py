@@ -12,6 +12,7 @@ class Pointer:
         self.span_w, self.span_h, self.off = span_w, span_h, off
         self.units = [0, 0]
         self.sent = []
+        self.links = 1
 
     async def send(self, command):
         self.sent.append(command)
@@ -74,3 +75,21 @@ def test_calibration_waits_for_a_click_when_the_pointer_is_never_found(tmp_path)
     phone._find_pointer = nothing
     assert asyncio.run(phone.start_calibration()) is False
     assert pointer.sent[-1] == "move 60 60"  # the manual fallback stays well inside the screen
+
+
+def test_every_tap_starts_from_the_homed_pointer(tmp_path):
+    import json
+
+    (tmp_path / "cal.json").write_text(json.dumps({"w": 136, "h": 329, "seen": {"x": [], "y": []}}))
+    pointer = Pointer(136, 329)
+    phone = Phone(pointer, tmp_path / "cal.json", None)
+
+    async def run():
+        await phone.tap(0.5, 0.8)
+        await phone.tap(0.2, 0.3)
+        await phone.tap(0.9, 0.1)
+
+    asyncio.run(run())
+    homes = [i for i, c in enumerate(pointer.sent) if c == "home"]
+    clicks = [i for i, c in enumerate(pointer.sent) if c == "click"]
+    assert len(homes) == 3 and all(h < c for h, c in zip(homes, clicks))  # a home before each of the three clicks
