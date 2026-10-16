@@ -71,6 +71,8 @@ THINK: My last tap opened the home screen as intended. The App Store icon is vis
 DO: tap 152 362"""
 
 LOOP_LIMIT = 3  # the same action this many times in the last few moves is a loop, not progress
+FRESH_WAIT = 1.2    # seconds to wait for the first frame after an action (taps that change nothing cost this much)
+SETTLE_QUIET = 0.5  # seconds without a new frame before the screen counts as settled after an action
 TAP_TOLERANCE = 25  # 0-1000 units (2.5% of the screen): taps this close are the same target
 META = ("t", "thought", "thought_zh", "think_s", "act_s", "shot", "_shot", "changed")  # not part of the action
 
@@ -219,7 +221,7 @@ class Agent:
         acts = await self._next_actions()
         seen = acts[0]["_shot"]
         spots = [self._pointer]  # where the pointer was and goes: pointer moves are not screen changes
-        stuck = self._repeating(acts[0])
+        stuck, acted, sent = self._repeating(acts[0]), False, time.time()
         for i, act in enumerate(acts):
             name = act["action"]
             if name == "replan" or stuck:
@@ -228,6 +230,7 @@ class Agent:
                 return False
             if name not in ("done", "fail"):
                 started = time.time()
+                acted = acted or name != "wait"
                 await self._do(act)
                 act["act_s"] = round(time.time() - started, 2)
                 spots += _pointer_path(act)
@@ -241,10 +244,20 @@ class Agent:
                 if not vision.changed(seen, self.screen.frame, ignore=tuple(spots)):
                     self.steps[-1]["changed"] = False
                     return False  # skip the rest; the actor looks again
-        await self.screen.settled()
+        await self._screen_after(sent if acted else None)
         # feedback for the next round
         self.steps[-1]["changed"] = vision.changed(seen, self.screen.frame, ignore=tuple(spots))
         return False
+
+    async def _screen_after(self, since: float | None) -> None:
+        """Wait for the screen to show what the action did.
+
+        AirPlay runs 0.5-1 s behind the phone and sends frames only on change, so waiting for the picture to be
+        quiet can pass before the first frame of the new screen has even arrived.
+        """
+        if since is not None:
+            await self.screen.fresh(since, FRESH_WAIT)
+        await self.screen.settled(quiet=SETTLE_QUIET if since is not None else 0.35)
 
     def _missed(self) -> bool:
         """The previous round changed nothing on screen, so a tap may have landed off target."""

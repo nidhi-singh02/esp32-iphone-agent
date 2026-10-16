@@ -127,3 +127,26 @@ def test_actor_prompt_asks_to_verify_before_done_and_not_to_duplicate():
 
     assert "Before done: open the place where the result should appear" in ACTOR_PROMPT
     assert "Do not create the same thing twice" in ACTOR_PROMPT
+
+
+def test_after_an_action_the_agent_waits_for_a_fresh_frame_then_for_quiet():
+    import asyncio
+
+    from hidagent.agent import Agent
+    from hidagent.debug import Trace
+
+    calls = []
+
+    class Screen:
+        async def fresh(self, since, timeout=0.8):
+            calls.append(("fresh", since, timeout))
+
+        async def settled(self, quiet=0.35, least=0.25, most=4):
+            calls.append(("settled", quiet))
+
+    agent = Agent(phone=None, screen=Screen(), actor=None, planner=None, trace=Trace(None))
+    asyncio.run(agent._screen_after(123.0))
+    assert calls == [("fresh", 123.0, 1.2), ("settled", 0.5)]
+    calls.clear()
+    asyncio.run(agent._screen_after(None))  # nothing was done (wait): no point waiting for a new frame
+    assert calls == [("settled", 0.35)]
