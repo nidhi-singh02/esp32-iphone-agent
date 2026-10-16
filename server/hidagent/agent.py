@@ -40,12 +40,13 @@ Each recent action says whether the screen changed after it. This is only a hint
 counts as a change, and a small change (a wheel moving one row) can be missed. Always compare the screen with what
 you intended. If it did not do what you intended, the action missed or had no effect: do not assume it worked;
 aim again more precisely or try another way.
-Only type when a text field is visibly focused (the keyboard is showing).
+Only type when a text field is focused: a blinking cursor in it. The on-screen keyboard may stay hidden because
+the phone has a Bluetooth keyboard, so do not wait for it.
 Swipes have no momentum: content moves exactly as far as the finger and stops. Prefer short swipes
 (100-250 units) and check the result; repeat if needed rather than one big swipe.
-Time or number wheels (e.g. an alarm's time): first tap the number in the wheel's center row and type
-the digits (e.g. type 0700); check the result. Only if typing does not work, swipe inside that column:
-measure the row spacing from two neighbouring numbers and swipe k times that spacing to move k rows.
+Time or number wheels (e.g. an alarm's time): a tap on a wheel only scrolls it one row, it does not let you type.
+Swipe inside the column: measure the row spacing from two neighbouring numbers and swipe k times that spacing to
+move k rows, then check the result. Check AM/PM too.
 Looking for an item in a list: scroll less than one screen at a time so nothing is skipped, and read every
 visible item. If you reached both ends of the list and the item is not there, stop with fail and name the
 closest options you saw; do not keep scrolling.

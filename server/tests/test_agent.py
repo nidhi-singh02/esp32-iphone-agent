@@ -200,3 +200,11 @@ def test_actor_prompt_calls_the_change_signal_a_hint():
     from hidagent.agent import ACTOR_PROMPT
 
     assert "only a hint" in ACTOR_PROMPT
+
+
+def test_actor_prompt_matches_how_the_phone_behaves():
+    from hidagent.agent import ACTOR_PROMPT
+
+    assert "keyboard may stay hidden" in ACTOR_PROMPT
+    assert "only scrolls it one row" in ACTOR_PROMPT
+    assert "visibly focused (the keyboard is showing)" not in ACTOR_PROMPT
