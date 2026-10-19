@@ -160,7 +160,7 @@ def test_after_an_action_the_agent_waits_for_a_fresh_frame_then_for_quiet():
     assert calls == [("settled", 0.35)]
 
 
-def test_a_repeated_tap_is_aimed_even_when_the_screen_changed():
+def test_every_tap_is_aimed():
     import asyncio
 
     from hidagent.agent import Agent
@@ -174,10 +174,9 @@ def test_a_repeated_tap_is_aimed_even_when_the_screen_changed():
 
     agent = Agent(phone=Phone(), screen=None, actor=None, planner=None, trace=Trace(None))
     asyncio.run(agent._do({"action": "tap", "x": 500, "y": 821}))
-    agent.steps = [{"action": "tap", "x": 502, "y": 821, "changed": True}]  # same spot, a widget faded in
     asyncio.run(agent._do({"action": "tap", "x": 500, "y": 821}))
-    asyncio.run(agent._do({"action": "tap", "x": 500, "y": 300}))  # a new target is not aimed
-    assert taps == [False, True, False]
+    asyncio.run(agent._do({"action": "tap", "x": 500, "y": 300}))
+    assert taps == [True, True, True]
 
 
 def test_refused_repeats_become_a_stuck_error_not_an_empty_reply_error():

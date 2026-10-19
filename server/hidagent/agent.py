@@ -70,8 +70,7 @@ After you tap Save, Done, the checkmark, Add, Close or Back, the screen changes 
 look at the new screen before doing anything else. Never tap the same button again just because the old screenshot
 still shows it; read the new screen first.
 Actions:
-  tap X Y [precise]         (precise: the pointer is located and corrected before tapping, about 1 s slower;
-                             use it for small or tightly packed targets: list rows, checkmarks, toggles, small icons)
+  tap X Y                   (the pointer is located and corrected before every tap, so aim at the centre of the target)
   swipe X1 Y1 X2 Y2         (finger moves from X1,Y1 to X2,Y2: "swipe down" means Y2 > Y1)
   path X1 Y1 X2 Y2 X3 Y3 …  (one continuous stroke through 2-20 points, for drawing)
   circle X Y R              (draw a circle centered at X Y; R is the radius in x units)
@@ -410,9 +409,9 @@ class Agent:
         p = lambda k: a[k] / 1000  # noqa: E731
         match a["action"]:
             case "tap":
-                # a tap at a spot already tried means the first one did not do what was wanted, whatever the
-                # screen change signal said (a fading widget counts as a change): find the pointer and correct it
-                aim = a.get("precise", False) or self._missed() or self._tried(a) >= 1
+                # every tap finds the pointer on screen first and corrects a miss: with the orange ring that is one
+                # frame (about 0.3 s), and an unaimed tap landed up to 0.03 of the screen off, enough to hit a neighbour
+                aim = True
                 await self.phone.tap(p("x"), p("y"), aim=aim)
             case "swipe": await self.phone.swipe(p("x1"), p("y1"), p("x2"), p("y2"))
             case "path": await self.phone.drag([(x / 1000, y / 1000) for x, y in a["points"]])
