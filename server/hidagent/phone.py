@@ -30,6 +30,9 @@ NUDGE = 12              # mouse units the pointer is wiggled by to find it on sc
 AIM_TOLERANCE = 0.008   # screen fraction; a bigger miss is corrected before pressing
 LEARN_FROM_AIM = False  # fold what aim sees into the calibration line: off, one misread pointer bends the line
 OUTLIER = 0.04          # a grid reading this far off the fitted surface is a misread pointer, not iOS
+STABLE_AFTER = 0.6      # seconds after a move before its pointer reading is trusted: AirPlay shows it late
+STABLE_POLL = 0.15      # seconds between the two readings that must agree
+STABLE_MAX = 2.0        # give up on a steady reading after this long and tap where the pointer is
 MAX_JUMP = 0.25         # a reading this far from the aim is a misread (a frame caught mid-move), not corrected
 MAX_MISS = 0.06         # bigger misses are still corrected, but not learned from (they may be misreadings)
 
@@ -85,6 +88,8 @@ class Phone:
         self.span = {"w": saved["w"], "h": saved["h"]} if saved else None
         self._pos = None  # pointer position in mouse units; None = unknown
         self._moves = 0
+        self._moved_at = 0.0  # when the pointer last moved
+        self._ringed = False  # the last aim saw an orange ring on screen
         self._link = 0  # device.links when the pointer was last homed
         # where the pointer really landed (seen on screen) for the screen fraction we aimed at, per axis;
         # a straight-line fit through them corrects every later move, so taps get better as the agent works
@@ -183,9 +188,8 @@ class Phone:
 
     async def _aim(self, x: float, y: float) -> None:
         """Closed loop: find the real pointer on screen, fix a miss, and learn the error for later moves."""
-        await self.screen.settled(quiet=0.15, least=0.1, most=0.6)  # pointer at rest
-        found = vision.pointer_by_color(self.screen.frame)  # the orange pointer ring: one frame, no wiggle
-        if found is None:
+        found = await self._read_pointer()  # the orange pointer ring: no wiggle
+        if found is None and not self._ringed:
             found = await self._find_by_nudge(x, y)
         if not found:
             log.debug("aim (%.3f, %.3f): pointer not found", x, y)
@@ -203,7 +207,27 @@ class Phone:
             return
         dx, dy = round((x - fx) * self.span["w"]), round((y - fy) * self.span["h"])  # fix this miss right away
         await self.device.send(f"move {dx} {dy}")
+        self._moved_at = time.time()
         self._pos = (self._pos[0] + dx, self._pos[1] + dy)
+
+    async def _read_pointer(self) -> tuple[float, float] | None:
+        """The pointer's place from its ring, once two readings in a row agree.
+
+        The mirrored picture runs up to a second behind the phone, so a frame taken right after a move shows the
+        pointer part-way along its path: correcting from that overshoots. Two readings that agree, taken after
+        the move had time to show up, mean the picture caught up. None if it never settles in STABLE_MAX.
+        """
+        self._ringed = False
+        started, last = time.time(), None
+        while time.time() - started < STABLE_MAX:
+            await asyncio.sleep(STABLE_POLL)
+            now = vision.pointer_by_color(self.screen.frame)
+            self._ringed = self._ringed or now is not None
+            if (now and last and abs(now[0] - last[0]) < 0.004 and abs(now[1] - last[1]) < 0.004
+                    and time.time() - self._moved_at >= STABLE_AFTER):
+                return now
+            last = now
+        return None
 
     async def _find_by_nudge(self, x: float, y: float) -> tuple[float, float] | None:
         """Fallback when the pointer has no orange ring: wiggle it and see what moved."""
@@ -244,6 +268,7 @@ class Phone:
         log.debug("pointer from %s to %s units", (x, y), (tx, ty))
         self._pos = None  # unknown until the move succeeds
         await self.device.send(f"move {tx - x} {ty - y}")
+        self._moved_at = time.time()
         self._pos, self._moves = (tx, ty), self._moves + 1
 
     async def reset(self) -> None:

@@ -176,6 +176,7 @@ def test_aim_corrects_the_tap_but_leaves_the_calibration_alone(tmp_path, monkeyp
 
     phone = Phone(pointer, tmp_path / "cal.json", Screen())
     phone._pos = (0, 0)
+    monkeypatch.setattr(phone_module, "STABLE_MAX", 0.05)
     monkeypatch.setattr(phone_module.vision, "pointer", lambda *a, **k: (0.55, 0.5))  # landed 0.05 right of the aim
     asyncio.run(phone._aim(0.5, 0.5))
     assert pointer.sent[-1].startswith("move -")  # this tap is corrected right away
@@ -244,6 +245,8 @@ def test_aim_reads_the_pointer_from_its_ring_without_wiggling_it(tmp_path, monke
 
     phone = Phone(pointer, tmp_path / "cal.json", Screen())
     phone._pos = (0, 0)
+    monkeypatch.setattr(phone_module, "STABLE_AFTER", 0)
+    monkeypatch.setattr(phone_module, "STABLE_POLL", 0.01)
     monkeypatch.setattr(phone_module.vision, "pointer_by_color", lambda frame: (0.55, 0.5))
     asyncio.run(phone._aim(0.5, 0.5))
     assert pointer.sent == ["move -7 0"]  # one correction, no nudge pair first
@@ -252,3 +255,46 @@ def test_aim_reads_the_pointer_from_its_ring_without_wiggling_it(tmp_path, monke
     monkeypatch.setattr(phone_module.vision, "pointer_by_color", lambda frame: (0.1, 0.9))  # a misread
     asyncio.run(phone._aim(0.5, 0.5))
     assert pointer.sent == []
+
+
+def test_aim_waits_for_two_agreeing_readings_so_a_frame_mid_move_is_not_used(tmp_path, monkeypatch):
+    from hidagent import phone as phone_module
+
+    (tmp_path / "cal.json").write_text('{"w": 145, "h": 332, "seen": {"x": [], "y": []}}')
+    pointer = Pointer(145, 332)
+
+    class Screen:
+        frame = b"frame"
+
+    phone = Phone(pointer, tmp_path / "cal.json", Screen())
+    phone._pos = (0, 0)
+    monkeypatch.setattr(phone_module, "STABLE_AFTER", 0)
+    monkeypatch.setattr(phone_module, "STABLE_POLL", 0.01)
+    monkeypatch.setattr(phone_module, "STABLE_MAX", 0.3)
+    readings = iter([(0.2, 0.3), (0.35, 0.45), (0.5, 0.5), (0.5, 0.5)])  # the picture catches up with the move
+    monkeypatch.setattr(phone_module.vision, "pointer_by_color", lambda frame: next(readings, (0.5, 0.5)))
+    assert asyncio.run(phone._read_pointer()) == (0.5, 0.5)
+
+    drifting = iter((0.1 * i, 0.1 * i) for i in range(1000))  # never settles
+    monkeypatch.setattr(phone_module.vision, "pointer_by_color", lambda frame: next(drifting))
+    assert asyncio.run(phone._read_pointer()) is None
+    asyncio.run(phone._aim(0.5, 0.5))
+    assert pointer.sent == []  # no steady reading, so no correction from a frame in flight
+
+
+def test_aim_does_not_trust_a_reading_taken_right_after_the_move(tmp_path, monkeypatch):
+    import time
+
+    from hidagent import phone as phone_module
+
+    (tmp_path / "cal.json").write_text('{"w": 145, "h": 332, "seen": {"x": [], "y": []}}')
+
+    class Screen:
+        frame = b"frame"
+
+    phone = Phone(Pointer(145, 332), tmp_path / "cal.json", Screen())
+    monkeypatch.setattr(phone_module, "STABLE_POLL", 0.01)
+    monkeypatch.setattr(phone_module, "STABLE_MAX", 0.2)
+    monkeypatch.setattr(phone_module.vision, "pointer_by_color", lambda frame: (0.5, 0.5))
+    phone._moved_at = time.time()  # the pointer has just moved: STABLE_AFTER (0.6 s) has not passed
+    assert asyncio.run(phone._read_pointer()) is None
