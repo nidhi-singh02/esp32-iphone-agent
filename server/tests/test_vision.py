@@ -3,7 +3,7 @@ import io
 import pytest
 from PIL import Image, ImageDraw
 
-from hidagent.vision import changed, pointer
+from hidagent.vision import changed, pointer, pointer_by_color
 
 W, H = 498, 1080  # a mirrored iPhone frame
 
@@ -87,3 +87,31 @@ def test_to_square_makes_pixel_positions_equal_grid_coordinates():
     assert out.size == (1000, 1000)
     assert out.getpixel((500, 250))[0] > 200 and out.getpixel((500, 250))[1] < 80  # y=250 of 1000: red
     assert out.getpixel((500, 750)) [1] > 200  # y=750 of 1000: white
+
+
+def ring_screen(at=None, decoy=None) -> bytes:
+    """A busy background with the orange pointer ring (and a dot) at `at`, and a small orange icon at `decoy`."""
+    img = Image.new("RGB", (W, H))
+    draw = ImageDraw.Draw(img)
+    for y in range(H):
+        draw.line([(0, y), (W, y)], fill=(40 + y % 90, 60 + y // 10, 120 + y % 40))
+    if decoy:
+        x, y = decoy
+        draw.rectangle([x - 20, y - 20, x + 20, y + 20], fill=(255, 69, 0))  # a brighter, redder orange
+    if at:
+        x, y = at
+        draw.ellipse([x - 62, y - 62, x + 62, y + 62], outline=(176, 88, 0), width=6)
+        draw.ellipse([x - 5, y - 5, x + 5, y + 5], fill=(190, 84, 0))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=75)
+    return buf.getvalue()
+
+
+def test_pointer_is_found_by_its_orange_ring_even_next_to_an_orange_icon():
+    x, y = pointer_by_color(ring_screen((277, 606), decoy=(120, 200)))
+    assert (x * W, y * H) == pytest.approx((277, 606), abs=3)
+
+
+def test_no_orange_ring_means_no_pointer():
+    assert pointer_by_color(ring_screen(None, decoy=(120, 200))) is None
+    assert pointer_by_color(b"not an image") is None

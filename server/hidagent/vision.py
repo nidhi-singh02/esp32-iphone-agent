@@ -72,3 +72,59 @@ def pointer(before: bytes, after: bytes, near: tuple[float, float], shift: float
     cx = sum(x for x, _ in hits) / len(hits) + left
     cy = sum(y for _, y in hits) / len(hits) + top
     return cx / w - shift / 2, cy / h
+
+
+def _orange(jpeg: bytes) -> Image.Image:
+    """Mask of pixels coloured like the iOS pointer ring (Pointer Control colour Orange): no blue, red twice green.
+
+    Almost nothing else on a screen has zero blue with that red/green ratio; bright app-icon oranges are
+    redder and brighter, so they fall outside.
+    """
+    r, g, b = Image.open(io.BytesIO(jpeg)).convert("RGB").split()
+    r_ok = r.point(lambda v: 255 if 100 <= v <= 235 else 0)
+    b_ok = b.point(lambda v: 255 if v <= 45 else 0)
+    ratio = ImageChops.subtract(r.point(lambda v: v // 2), g)  # r/2 - g, offset below
+    ratio_ok = ImageChops.add(ratio, ImageChops.subtract(g, r.point(lambda v: v // 2))).point(
+        lambda v: 255 if v <= 28 else 0)  # |g - r/2| <= 28
+    return ImageChops.multiply(ImageChops.multiply(r_ok, b_ok), ratio_ok)
+
+
+def pointer_by_color(jpeg: bytes | None, ring: float = 0.26, least: int = 150) -> tuple[float, float] | None:
+    """Where the pointer is in one frame, from its orange ring; None when no ring-sized cluster is there.
+
+    ring: the ring's diameter as a fraction of the frame width. The densest window of that size is taken, so a
+    stray orange pixel elsewhere does not move the answer. The result is the centre of the ring (the click point).
+    """
+    if not jpeg:
+        return None
+    try:
+        mask = _orange(jpeg)
+    except OSError:  # not an image
+        return None
+    w, h = mask.size
+    cell = 6
+    gw, gh = w // cell, h // cell
+    grid = list(mask.resize((gw, gh), Image.BOX).tobytes())  # 0-255: share of orange in each cell
+    side = max(2, round(ring * w / cell))
+    best, at = 0, None
+    # a sliding window over the cell grid, with row-wise running sums
+    for top in range(0, max(1, gh - side + 1)):
+        cols = [sum(grid[(top + dy) * gw + x] for dy in range(side)) for x in range(gw)]
+        run = sum(cols[:side])
+        for left in range(0, max(1, gw - side + 1)):
+            if left:
+                run += cols[left + side - 1] - cols[left - 1]
+            if run > best:
+                best, at = run, (left, top)
+    if at is None or best * cell * cell / 255 < least:  # orange pixels in the window
+        return None
+    x0, y0 = at[0] * cell, at[1] * cell
+    box = (x0, y0, min(w, x0 + side * cell), min(h, y0 + side * cell))
+    data = mask.crop(box).tobytes()
+    bw = box[2] - box[0]
+    pts = [(i % bw, i // bw) for i, v in enumerate(data) if v]
+    if len(pts) < least:
+        return None
+    cx = sum(x for x, _ in pts) / len(pts) + box[0]
+    cy = sum(y for _, y in pts) / len(pts) + box[1]
+    return cx / w, cy / h
