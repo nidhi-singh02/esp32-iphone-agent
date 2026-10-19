@@ -275,7 +275,8 @@ def test_a_title_bar_tap_ends_the_batch():
     agent = Agent(phone=Phone(), screen=Screen(), actor=None, planner=None, trace=Trace(None))
 
     async def next_actions():
-        return [{"action": "tap", "x": 905, "y": 115, "_shot": b""}, {"action": "tap", "x": 500, "y": 500, "_shot": b""}]
+        return [{"action": "tap", "x": 905, "y": 115, "_shot": b""},
+                {"action": "tap", "x": 500, "y": 500, "_shot": b""}]
 
     agent._next_actions = next_actions
     asyncio.run(agent._step())

@@ -88,7 +88,7 @@ THINK: My last tap opened the home screen as intended. The App Store icon is vis
 DO: tap 152 362"""
 
 LOOP_LIMIT = 3  # the same action this many times in the last few moves is a loop, not progress
-TOP_BAR = 130        # 0-1000: a tap this high is a title-bar button (Save, Done, back, close): the screen changes under it
+TOP_BAR = 130        # 0-1000: a tap this high is a title-bar button (Save, Done, back, close); the screen changes
 CONFIRM_X = 700     # 0-1000: with TOP_BAR, the top-right corner where Save, Done, Add and the checkmark sit
 FRESH_WAIT = 1.2    # seconds to wait for the first frame after an action (taps that change nothing cost this much)
 SETTLE_QUIET = 0.5  # seconds without a new frame before the screen counts as settled after an action
@@ -369,9 +369,10 @@ class Agent:
         prompt = f"Goal: {self.task}\n\nPlan:\n{self.plan}\n\nRecent actions:\n{history}\n\nNext action?"
         if self._saved:  # the recent-actions window forgets the save after a few steps
             prompt += (f"\n\nYou already tapped the save/confirm button at {self._saved} earlier in this task, so the "
-                       "item you were creating probably exists now. Do NOT create it again (no + or New): open the list "
-                       "where it should appear (look in other views like Scheduled or All if it is not in Today) and, "
-                       "if you see it with the right details, answer done. Only if it is truly missing, redo it.")
+                       "item you were creating probably exists now. Do NOT create it again (no + or New): open the "
+                       "list where it should appear (look in other views like Scheduled or All if it is not in "
+                       "Today) and, if you see it with the right details, answer done. Only if it is truly missing, "
+                       "redo it.")
         prompt += ("\n\nThe screenshot is stretched to a 1000x1000 square. Give x and y as pixel positions in this "
                    "picture (0 to 1000 on both axes).")
         refused = ""
@@ -396,8 +397,8 @@ class Agent:
             if (n := self._tried(acts[0])) >= LOOP_LIMIT - 1:  # same action again and again, even if it "worked"
                 log.info("actor proposed %s for the %d. time; asking for another", _key(acts[0]), n + 1)
                 refused = f"{json.dumps(_key(acts[0]))} for the {n + 1}. time"
-                prompt += (f"\n\nYou already did {json.dumps(_key(acts[0]))} {n} times in the last few moves and it did "
-                           "not get you where you wanted. Do not do it again: pick another target or another way.")
+                prompt += (f"\n\nYou already did {json.dumps(_key(acts[0]))} {n} times in the last few moves and it "
+                           "did not get you where you wanted. Do not do it again: pick another target or another way.")
                 continue
             acts[0]["think_s"] = seconds
             return [{**a, "_shot": frame} for a in acts]  # every action is drawn on the same screenshot

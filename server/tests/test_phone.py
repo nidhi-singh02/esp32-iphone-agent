@@ -92,7 +92,8 @@ def test_every_tap_starts_from_the_homed_pointer(tmp_path):
     asyncio.run(run())
     homes = [i for i, c in enumerate(pointer.sent) if c == "home"]
     clicks = [i for i, c in enumerate(pointer.sent) if c == "click"]
-    assert len(homes) == 3 and all(h < c for h, c in zip(homes, clicks))  # a home before each of the three clicks
+    # a home before each of the three clicks
+    assert len(homes) == 3 and all(h < c for h, c in zip(homes, clicks, strict=True))
 
 
 def _phone(tmp_path, screen):
@@ -162,7 +163,8 @@ def test_aim_corrects_the_tap_but_leaves_the_calibration_alone(tmp_path, monkeyp
 
     from hidagent import phone as phone_module
 
-    (tmp_path / "cal.json").write_text(json.dumps({"w": 145, "h": 332, "seen": {"x": [[0.3, 0.3], [0.6, 0.6]], "y": []}}))
+    seen = {"x": [[0.3, 0.3], [0.6, 0.6]], "y": []}
+    (tmp_path / "cal.json").write_text(json.dumps({"w": 145, "h": 332, "seen": seen}))
     pointer = Pointer(145, 332)
 
     class Screen:
@@ -201,8 +203,9 @@ def test_fit_surface_recovers_the_landing_and_drops_a_misread_point():
     assert surface["box"] == [20, 120, 30, 310]
     for u, v in ((20, 30), (70, 170), (120, 310), (33, 205)):
         x, y = landing(u, v)
-        assert sum(c * t for c, t in zip(surface["x"], [1, u, v, u * v, u * u, v * v])) == pytest.approx(x, abs=0.002)
-        assert sum(c * t for c, t in zip(surface["y"], [1, u, v, u * v, u * u, v * v])) == pytest.approx(y, abs=0.002)
+        terms = [1, u, v, u * v, u * u, v * v]
+        assert sum(c * t for c, t in zip(surface["x"], terms, strict=True)) == pytest.approx(x, abs=0.002)
+        assert sum(c * t for c, t in zip(surface["y"], terms, strict=True)) == pytest.approx(y, abs=0.002)
 
 
 def test_fit_surface_needs_enough_points():

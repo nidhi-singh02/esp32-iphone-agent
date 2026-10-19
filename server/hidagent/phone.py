@@ -23,7 +23,7 @@ CALIBRATION_PROBES = (40, 25, 70)  # first stop of the automatic calibration: th
 CALIBRATION_REACH = 0.75  # the second stop goes to this fraction of the smaller span, so no axis hits the screen edge
 EDGE = 0.9              # a pointer found beyond this fraction of the screen may be stuck at the edge: not trusted
 SHIFT_GUESS = 0.04      # screen fraction a NUDGE is assumed to move the pointer before the span is known
-REHOME_EVERY = 1        # gestures between re-homing: every one, so a move always runs the long path the calibration measured
+REHOME_EVERY = 1        # gestures between re-homing: every one, so a move runs the long path the calibration measured
 HOLD = 0.25             # seconds to rest before lifting, so iOS adds no momentum (the swipe stops where it ends)
 TAP_GAP = 0.15          # seconds to stay still after a click, so iOS sees a finished tap, not the start of a drag
 NUDGE = 12              # mouse units the pointer is wiggled by to find it on screen
@@ -40,7 +40,8 @@ MAX_MISS = 0.06         # bigger misses are still corrected, but not learned fro
 def _solve(rows: list[list[float]], targets: list[float]) -> list[float]:
     """Least squares by the normal equations (Gauss-Jordan); no numpy needed for six unknowns."""
     n = len(rows[0])
-    m = [[sum(r[i] * r[j] for r in rows) for j in range(n)] + [sum(r[i] * t for r, t in zip(rows, targets))]
+    m = [[sum(r[i] * r[j] for r in rows) for j in range(n)]
+         + [sum(r[i] * t for r, t in zip(rows, targets, strict=True))]
          for i in range(n)]
     for i in range(n):
         p = max(range(i, n), key=lambda k: abs(m[k][i]))
@@ -48,7 +49,7 @@ def _solve(rows: list[list[float]], targets: list[float]) -> list[float]:
         for k in range(n):
             if k != i:
                 f = m[k][i] / m[i][i]
-                m[k] = [a - f * b for a, b in zip(m[k], m[i])]
+                m[k] = [a - f * b for a, b in zip(m[k], m[i], strict=True)]
     return [m[i][n] / m[i][i] for i in range(n)]
 
 
@@ -69,8 +70,9 @@ def fit_surface(samples: list[tuple[float, float, float, float]]) -> dict | None
             return None
         rows = [_terms(u, v) for u, v, _, _ in pts]
         fits = [_solve(rows, [p[2 + a] for p in pts]) for a in range(2)]
-        err = [max(abs(sum(c * t for c, t in zip(fits[a], r)) - p[2 + a]) for a in range(2)) for r, p in zip(rows, pts)]
-        keep = [p for p, e in zip(pts, err) if e <= OUTLIER]
+        err = [max(abs(sum(c * t for c, t in zip(fits[a], r, strict=True)) - p[2 + a]) for a in range(2))
+               for r, p in zip(rows, pts, strict=True)]
+        keep = [p for p, e in zip(pts, err, strict=True) if e <= OUTLIER]
         if len(keep) == len(pts):
             break
         pts = keep
@@ -357,7 +359,7 @@ class Phone:
             if lo_u <= u <= hi_u and lo_v <= v <= hi_v:
                 for _ in range(8):  # the surface is nearly linear, so a few steps of correction settle it
                     t = _terms(u, v)
-                    lx, ly = (sum(c * a for c, a in zip(s[axis], t)) for axis in "xy")
+                    lx, ly = (sum(c * a for c, a in zip(s[axis], t, strict=True)) for axis in "xy")
                     u, v = u - (lx - x) * self.span["w"], v - (ly - y) * self.span["h"]
                     u, v = min(max(u, lo_u), hi_u), min(max(v, lo_v), hi_v)
                 return round(u), round(v)
