@@ -377,3 +377,35 @@ def test_the_save_check_is_told_what_the_agent_means_to_do():
     agent._next_actions = next_actions
     asyncio.run(agent._step())
     assert "I tap + to add an alarm" in seen[0] and "only opens or goes to another screen" in seen[0]
+
+
+def test_after_a_save_tap_the_actor_is_told_not_to_create_the_item_again():
+    import asyncio
+
+    from hidagent.agent import Agent
+
+    agent, _ = _save_agent("OK")
+    asked = []
+
+    class Actor:
+        model = "fake"
+
+        async def chat(self, system, text, image=None, max_tokens=2000, temperature=0):
+            asked.append(text)
+            return "THINK: look\nDO: wait"
+
+    asyncio.run(agent._step())  # taps save
+    agent.actor = Actor()
+    asyncio.run(Agent._next_actions(agent))
+    assert "already tapped the save/confirm button" in asked[-1] and "Do NOT create it again" in asked[-1]
+    agent._saved = None  # a task that has not saved anything gets no such note
+    asyncio.run(Agent._next_actions(agent))
+    assert "already tapped" not in asked[-1]
+
+
+def test_a_blocked_save_does_not_count_as_saved():
+    import asyncio
+
+    agent, _ = _save_agent("WRONG: wrong time")
+    asyncio.run(agent._step())
+    assert agent._saved is None

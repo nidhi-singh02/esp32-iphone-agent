@@ -180,6 +180,7 @@ class Agent:
         self.task, self.plan, self.steps = "", "", []
         self.shots: dict[int, bytes] = {}  # step index -> screenshot the model decided on
         self._pointer = (0.0, 0.0)  # last pointer position (screen fractions)
+        self._saved: str | None = None  # the save tap that ran, once one has: the item may exist now
         self._job: asyncio.Task | None = None
 
     @property
@@ -192,7 +193,7 @@ class Agent:
         if not self.screen.live:
             raise RuntimeError("no phone screen: start Screen Mirroring first")
         self.task, self.plan, self.steps, self.shots = task, "", [], {}
-        self._pointer = (0.0, 0.0)
+        self._pointer, self._saved = (0.0, 0.0), None
         self.trace.start(task)
         self._job = asyncio.create_task(self._run())
 
@@ -272,6 +273,8 @@ class Agent:
                 started = time.time()
                 acted = acted or name != "wait"
                 await self._do(act)
+                if name == "tap" and act["y"] <= TOP_BAR and act["x"] >= CONFIRM_X:
+                    self._saved = f"({act['x']}, {act['y']})"
                 act["act_s"] = round(time.time() - started, 2)
                 spots += _pointer_path(act)
                 self._pointer = spots[-1]
@@ -365,6 +368,11 @@ class Agent:
                             + effect.get(s.get("changed"), "")
                             for s in self.steps[-8:] if "plan" not in s) or "(none)"
         prompt = f"Goal: {self.task}\n\nPlan:\n{self.plan}\n\nRecent actions:\n{history}\n\nNext action?"
+        if self._saved:  # the recent-actions window forgets the save after a few steps
+            prompt += (f"\n\nYou already tapped the save/confirm button at {self._saved} earlier in this task, so the "
+                       "item you were creating probably exists now. Do NOT create it again (no + or New): open the list "
+                       "where it should appear (look in other views like Scheduled or All if it is not in Today) and, "
+                       "if you see it with the right details, answer done. Only if it is truly missing, redo it.")
         prompt += ("\n\nThe screenshot is stretched to a 1000x1000 square. Give x and y as pixel positions in this "
                    "picture (0 to 1000 on both axes).")
         refused = ""
