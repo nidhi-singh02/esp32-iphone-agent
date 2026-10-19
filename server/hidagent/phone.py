@@ -30,6 +30,7 @@ NUDGE = 12              # mouse units the pointer is wiggled by to find it on sc
 AIM_TOLERANCE = 0.008   # screen fraction; a bigger miss is corrected before pressing
 LEARN_FROM_AIM = False  # fold what aim sees into the calibration line: off, one misread pointer bends the line
 OUTLIER = 0.04          # a grid reading this far off the fitted surface is a misread pointer, not iOS
+MAX_JUMP = 0.25         # a reading this far from the aim is a misread (a frame caught mid-move), not corrected
 MAX_MISS = 0.06         # bigger misses are still corrected, but not learned from (they may be misreadings)
 
 
@@ -182,23 +183,17 @@ class Phone:
 
     async def _aim(self, x: float, y: float) -> None:
         """Closed loop: find the real pointer on screen, fix a miss, and learn the error for later moves."""
-        nudge = NUDGE if x < 0.9 else -NUDGE  # stay clear of the screen edge
         await self.screen.settled(quiet=0.15, least=0.1, most=0.6)  # pointer at rest
-        before, sent = self.screen.frame, time.time()
-        await self.device.send(f"move {nudge} 0")
-        after = await self.screen.fresh(sent, 0.6)
-        if after:
-            await self.screen.settled(quiet=0.1, least=0.05, most=0.4)
-            after = self.screen.frame
-        await self.device.send(f"move {-nudge} 0")
-        shift = nudge / self.span["w"]
-        found = before and after and (vision.pointer(before, after, (x, y), shift)  # near the target first,
-                                      or vision.pointer(before, after, (0.5, 0.5), shift, reach=(0.5, 0.5)))  # anywhere
+        found = vision.pointer_by_color(self.screen.frame)  # the orange pointer ring: one frame, no wiggle
+        if found is None:
+            found = await self._find_by_nudge(x, y)
         if not found:
-            log.debug("aim (%.3f, %.3f): pointer not found (%s)", x, y,
-                      "no new frame after the nudge" if not after else "no pointer-sized change near the target")
+            log.debug("aim (%.3f, %.3f): pointer not found", x, y)
             return
         fx, fy = found
+        if max(abs(fx - x), abs(fy - y)) > MAX_JUMP:  # a pointer never misses by this much: a misreading
+            log.debug("aim (%.3f, %.3f): ignored a reading at (%.3f, %.3f), too far", x, y, fx, fy)
+            return
         log.debug("aim (%.3f, %.3f): pointer at (%.3f, %.3f)", x, y, fx, fy)
         if LEARN_FROM_AIM and max(abs(fx - x), abs(fy - y)) <= MAX_MISS:  # normal drift only, never a stray reading
             self._seen["x"].append((self._fix(x, "x"), fx))
@@ -209,6 +204,20 @@ class Phone:
         dx, dy = round((x - fx) * self.span["w"]), round((y - fy) * self.span["h"])  # fix this miss right away
         await self.device.send(f"move {dx} {dy}")
         self._pos = (self._pos[0] + dx, self._pos[1] + dy)
+
+    async def _find_by_nudge(self, x: float, y: float) -> tuple[float, float] | None:
+        """Fallback when the pointer has no orange ring: wiggle it and see what moved."""
+        nudge = NUDGE if x < 0.9 else -NUDGE  # stay clear of the screen edge
+        before, sent = self.screen.frame, time.time()
+        await self.device.send(f"move {nudge} 0")
+        after = await self.screen.fresh(sent, 0.6)
+        if after:
+            await self.screen.settled(quiet=0.1, least=0.05, most=0.4)
+            after = self.screen.frame
+        await self.device.send(f"move {-nudge} 0")
+        shift = nudge / self.span["w"]
+        return before and after and (vision.pointer(before, after, (x, y), shift)  # near the target first,
+                                     or vision.pointer(before, after, (0.5, 0.5), shift, reach=(0.5, 0.5)))  # anywhere
 
     def _fix(self, t: float, axis: str) -> float:
         """The fraction to aim at so the pointer lands on t, from the line through the observed landings."""

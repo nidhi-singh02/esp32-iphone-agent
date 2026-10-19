@@ -228,3 +228,27 @@ def test_the_surface_is_saved_and_dropped_by_a_new_calibration(tmp_path):
     assert Phone(Pointer(145, 332), cal)._surface == phone._surface
     phone.finish_calibration(0.4, 0.4)
     assert Phone(Pointer(145, 332), cal)._surface is None
+
+
+def test_aim_reads_the_pointer_from_its_ring_without_wiggling_it(tmp_path, monkeypatch):
+    from hidagent import phone as phone_module
+
+    (tmp_path / "cal.json").write_text('{"w": 145, "h": 332, "seen": {"x": [], "y": []}}')
+    pointer = Pointer(145, 332)
+
+    class Screen:
+        frame = b"frame"
+
+        async def settled(self, **kw):
+            pass
+
+    phone = Phone(pointer, tmp_path / "cal.json", Screen())
+    phone._pos = (0, 0)
+    monkeypatch.setattr(phone_module.vision, "pointer_by_color", lambda frame: (0.55, 0.5))
+    asyncio.run(phone._aim(0.5, 0.5))
+    assert pointer.sent == ["move -7 0"]  # one correction, no nudge pair first
+
+    pointer.sent.clear()
+    monkeypatch.setattr(phone_module.vision, "pointer_by_color", lambda frame: (0.1, 0.9))  # a misread
+    asyncio.run(phone._aim(0.5, 0.5))
+    assert pointer.sent == []
