@@ -18,3 +18,8 @@ hardware/hid_bridge/build/
 .DS_Store
 .idea/
 .vscode/
+
+# Host test output
+hardware/tests/test
+hardware/tests/test.dSYM/
+hardware/tools/out/

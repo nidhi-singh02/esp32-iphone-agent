@@ -1,5 +1,4 @@
-// Copy to secrets.h (git-ignored) and fill in.
+// Only for test builds: `hardware/flash.sh --sta` boots the board as a Wi-Fi station on this
+// network instead of its own hotspot (e.g. to mirror a Mac to it). Copy to secrets.h (git-ignored).
 #define WIFI_SSID "your-wifi"
 #define WIFI_PASS "your-password"
-#define SERVER_HOST "192.168.1.10"  // machine running `python -m hidagent`
-#define SERVER_PORT 7300
