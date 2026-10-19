@@ -60,8 +60,11 @@ setting) and read it on screen. Say done only when you have seen the result ther
 Do not create the same thing twice. If you cannot find what you just created, first look in other views or lists
 (e.g. a reminder set for tomorrow is not in Today; look under Scheduled) before creating it again.
 If the screen shows something that has nothing to do with your task and that you did not open yourself (an
-incoming or active phone or video call, FaceTime, the lock screen, a permission or system alert, an app you never
-opened), stop at once with: fail <what you see>. Do not tap anything on that screen and do not try to find your way back.
+incoming or active phone or video call, FaceTime, the lock screen, an app you never opened), stop at once with:
+fail <what you see>. Do not tap anything on that screen and do not try to find your way back.
+A permission prompt or popup from the app you are working in (e.g. "Allow Alarms for Urgent Reminders", a
+notification or location request, an unexpected menu) is not unrelated: a stray tap opened it. Dismiss it with the
+safe choice (Not Now, Don't Allow, Cancel, or tap outside it), then carry on with the task.
 If you are unsure what an element does, tap it alone (one DO line) and check the result next round.
 After you tap Save, Done, the checkmark, Add, Close or Back, the screen changes under you: give that tap alone, then
 look at the new screen before doing anything else. Never tap the same button again just because the old screenshot

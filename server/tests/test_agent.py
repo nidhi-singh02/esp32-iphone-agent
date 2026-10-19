@@ -290,6 +290,13 @@ def test_actor_prompt_stops_on_an_unrelated_screen():
     assert "phone or video call" in ACTOR_PROMPT and "lock screen" in ACTOR_PROMPT
 
 
+def test_actor_prompt_dismisses_prompts_from_the_app_it_is_working_in():
+    from hidagent.agent import ACTOR_PROMPT
+
+    assert "Allow Alarms for Urgent Reminders" in ACTOR_PROMPT and "Not Now" in ACTOR_PROMPT
+    assert "a permission or system alert" not in ACTOR_PROMPT
+
+
 def test_actor_prompt_rereads_every_wheel_column():
     from hidagent.agent import ACTOR_PROMPT
 
