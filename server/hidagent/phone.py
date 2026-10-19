@@ -29,7 +29,51 @@ TAP_GAP = 0.15          # seconds to stay still after a click, so iOS sees a fin
 NUDGE = 12              # mouse units the pointer is wiggled by to find it on screen
 AIM_TOLERANCE = 0.008   # screen fraction; a bigger miss is corrected before pressing
 LEARN_FROM_AIM = False  # fold what aim sees into the calibration line: off, one misread pointer bends the line
+OUTLIER = 0.04          # a grid reading this far off the fitted surface is a misread pointer, not iOS
 MAX_MISS = 0.06         # bigger misses are still corrected, but not learned from (they may be misreadings)
+
+
+def _solve(rows: list[list[float]], targets: list[float]) -> list[float]:
+    """Least squares by the normal equations (Gauss-Jordan); no numpy needed for six unknowns."""
+    n = len(rows[0])
+    m = [[sum(r[i] * r[j] for r in rows) for j in range(n)] + [sum(r[i] * t for r, t in zip(rows, targets))]
+         for i in range(n)]
+    for i in range(n):
+        p = max(range(i, n), key=lambda k: abs(m[k][i]))
+        m[i], m[p] = m[p], m[i]
+        for k in range(n):
+            if k != i:
+                f = m[k][i] / m[i][i]
+                m[k] = [a - f * b for a, b in zip(m[k], m[i])]
+    return [m[i][n] / m[i][i] for i in range(n)]
+
+
+def _terms(u: float, v: float) -> list[float]:
+    return [1, u, v, u * v, u * u, v * v]
+
+
+def fit_surface(samples: list[tuple[float, float, float, float]]) -> dict | None:
+    """Where the pointer lands for a move of (u, v) mouse units from the corner, as a quadratic per axis.
+
+    samples: (u, v, x, y) landings seen on screen. iOS pointer acceleration makes the landing on one axis depend
+    on the distance travelled on the other, which a line per axis cannot capture. Points that miss the fit by
+    more than OUTLIER are dropped (a misread pointer) and the rest refitted. None when too few points remain.
+    """
+    pts = list(samples)
+    for _ in range(3):
+        if len(pts) < 12:
+            return None
+        rows = [_terms(u, v) for u, v, _, _ in pts]
+        fits = [_solve(rows, [p[2 + a] for p in pts]) for a in range(2)]
+        err = [max(abs(sum(c * t for c, t in zip(fits[a], r)) - p[2 + a]) for a in range(2)) for r, p in zip(rows, pts)]
+        keep = [p for p, e in zip(pts, err) if e <= OUTLIER]
+        if len(keep) == len(pts):
+            break
+        pts = keep
+    else:
+        return None
+    return {"x": fits[0], "y": fits[1], "box": [min(p[0] for p in pts), max(p[0] for p in pts),
+                                                 min(p[1] for p in pts), max(p[1] for p in pts)]}
 
 
 class Phone:
@@ -43,6 +87,7 @@ class Phone:
         self._link = 0  # device.links when the pointer was last homed
         # where the pointer really landed (seen on screen) for the screen fraction we aimed at, per axis;
         # a straight-line fit through them corrects every later move, so taps get better as the agent works
+        self._surface = (saved or {}).get("surface")  # measured landings over the screen (fit_surface), or None
         self._seen = {axis: deque(map(tuple, (saved or {}).get("seen", {}).get(axis, [])), maxlen=12)
                       for axis in ("x", "y")}
 
@@ -87,6 +132,7 @@ class Phone:
         # by half the difference (a common shift, so it did not change the span)
         bias = (SHIFT_GUESS - NUDGE / self.span["w"]) / 2
         seen = [(u, x + bias, y) for u, x, y in seen]
+        self._surface = None  # measured for the old span
         for samples in self._seen.values():
             samples.clear()
         for units, x, y in seen:  # where each stop landed, so moves are corrected for the offset too
@@ -115,18 +161,22 @@ class Phone:
     def finish_calibration(self, x: float, y: float) -> None:
         """x, y: where the pointer ended up after start_calibration() (one point, picked by the user)."""
         self.span = {"w": round(CALIBRATION_MOVE / x), "h": round(CALIBRATION_MOVE / y)}
+        self._surface = None
         for samples in self._seen.values():
             samples.clear()
         self._save()
 
     def _save(self) -> None:
         """Calibration plus the observed landings, so the correction survives a restart."""
-        self._file.write_text(json.dumps({**self.span, "seen": {k: list(v) for k, v in self._seen.items()}}))
+        saved = {**self.span, "seen": {k: list(v) for k, v in self._seen.items()}}
+        if self._surface:
+            saved["surface"] = self._surface
+        self._file.write_text(json.dumps(saved))
 
     async def point(self, x: float, y: float, aim: bool = False) -> None:
         if not self.calibrated:
             raise RuntimeError("pointer not calibrated")
-        await self._move_to(self._dx(x), self._dy(y))
+        await self._move_to(*self._units(x, y))
         if aim and self.screen is not None:
             await self._aim(x, y)
 
@@ -259,6 +309,25 @@ class Phone:
 
     async def go_back(self) -> None:
         await self.swipe(0.005, 0.45, 0.6, 0.45, hold=False)
+
+    def _units(self, x: float, y: float) -> tuple[int, int]:
+        """Mouse units to move from the corner so the pointer lands on (x, y).
+
+        Inside the measured area (self._surface) the landing surface is inverted; elsewhere, and from a
+        pointer that is not at the corner, the per-axis line is used.
+        """
+        s = self._surface
+        if s:
+            u, v = (self._fix(x, "x") * self.span["w"], self._fix(y, "y") * self.span["h"])
+            lo_u, hi_u, lo_v, hi_v = s["box"]
+            if lo_u <= u <= hi_u and lo_v <= v <= hi_v:
+                for _ in range(8):  # the surface is nearly linear, so a few steps of correction settle it
+                    t = _terms(u, v)
+                    lx, ly = (sum(c * a for c, a in zip(s[axis], t)) for axis in "xy")
+                    u, v = u - (lx - x) * self.span["w"], v - (ly - y) * self.span["h"]
+                    u, v = min(max(u, lo_u), hi_u), min(max(v, lo_v), hi_v)
+                return round(u), round(v)
+        return self._dx(x), self._dy(y)
 
     def _dx(self, x: float) -> int:
         return round(min(max(self._fix(x, "x"), 0), 1) * self.span["w"])

@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from hidagent.phone import NUDGE, SHIFT_GUESS, Phone
+from hidagent.phone import NUDGE, SHIFT_GUESS, Phone, fit_surface
 
 
 class Pointer:
@@ -181,3 +181,50 @@ def test_aim_corrects_the_tap_but_leaves_the_calibration_alone(tmp_path, monkeyp
     assert pointer.sent[-1].startswith("move -")  # this tap is corrected right away
     assert list(phone._seen["x"]) == [(0.3, 0.3), (0.6, 0.6)] and not phone._seen["y"]
     assert json.loads((tmp_path / "cal.json").read_text())["seen"]["x"] == [[0.3, 0.3], [0.6, 0.6]]
+
+
+def landing(u, v):
+    """A pointer whose x gain grows with the vertical distance and whose y drifts with the horizontal one."""
+    return 0.05 + u / 145 * (1 + 0.00004 * v), 0.03 + v / 332 + 0.0002 * u
+
+
+def grid(bad=None):
+    pts = [(u, v, *landing(u, v)) for v in (30, 100, 170, 240, 310) for u in (20, 45, 70, 95, 120)]
+    if bad:
+        pts[bad] = (*pts[bad][:2], 0.2, 0.9)  # a misread pointer
+    return pts
+
+
+def test_fit_surface_recovers_the_landing_and_drops_a_misread_point():
+    surface = fit_surface(grid(bad=12))
+    assert surface["box"] == [20, 120, 30, 310]
+    for u, v in ((20, 30), (70, 170), (120, 310), (33, 205)):
+        x, y = landing(u, v)
+        assert sum(c * t for c, t in zip(surface["x"], [1, u, v, u * v, u * u, v * v])) == pytest.approx(x, abs=0.002)
+        assert sum(c * t for c, t in zip(surface["y"], [1, u, v, u * v, u * u, v * v])) == pytest.approx(y, abs=0.002)
+
+
+def test_fit_surface_needs_enough_points():
+    assert fit_surface(grid()[:8]) is None
+
+
+def test_a_tap_inside_the_measured_area_lands_where_aimed_despite_the_cross_terms(tmp_path):
+    cal = tmp_path / "cal.json"
+    cal.write_text('{"w": 145, "h": 332, "seen": {"x": [], "y": []}}')
+    phone = Phone(Pointer(145, 332), cal)
+    phone._surface = fit_surface(grid())
+    for x, y in ((0.4, 0.5), (0.8, 0.9), (0.3, 0.2)):
+        u, v = phone._units(x, y)
+        lx, ly = landing(u, v)
+        assert (lx, ly) == pytest.approx((x, y), abs=0.008)  # one mouse unit is 0.007 of the width
+
+
+def test_the_surface_is_saved_and_dropped_by_a_new_calibration(tmp_path):
+    cal = tmp_path / "cal.json"
+    cal.write_text('{"w": 145, "h": 332, "seen": {"x": [], "y": []}}')
+    phone = Phone(Pointer(145, 332), cal)
+    phone._surface = fit_surface(grid())
+    phone._save()
+    assert Phone(Pointer(145, 332), cal)._surface == phone._surface
+    phone.finish_calibration(0.4, 0.4)
+    assert Phone(Pointer(145, 332), cal)._surface is None
