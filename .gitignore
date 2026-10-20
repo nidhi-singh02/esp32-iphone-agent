@@ -8,7 +8,7 @@ __pycache__/
 # Local config and secrets
 .env
 hardware/hid_bridge/secrets.h
-hardware/hid_bridge_ble/secrets.h
+hardware/hid_bridge_ble_c3/secrets.h
 
 # Build output
 hardware/build/
@@ -18,3 +18,5 @@ hardware/hid_bridge/build/
 .DS_Store
 .idea/
 .vscode/
+hardware/hid_bridge_ble_c3/build/
+build_ble/

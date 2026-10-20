@@ -1,8 +1,8 @@
 # Builds the BLE HID bridge firmware without installing anything on the host.
 # Build the image (from the repo root):
-#   docker build --platform linux/amd64 --progress=plain -t hid-bridge-ble hardware/hid_bridge_ble
+#   docker build --platform linux/amd64 --progress=plain -t hid-bridge-ble-c3 hardware/hid_bridge_ble_c3
 # Compile (C3 by default; set FQBN for a classic ESP32), merged .bin files land in ./build_ble:
-#   docker run --rm --platform linux/amd64 -v "$PWD/hardware/hid_bridge_ble:/src/hid_bridge_ble" -v "$PWD/build_ble:/out" hid-bridge-ble
+#   docker run --rm --platform linux/amd64 -v "$PWD/hardware/hid_bridge_ble_c3:/src/hid_bridge_ble_c3" -v "$PWD/build_ble:/out" hid-bridge-ble-c3
 FROM debian:bookworm-slim
 
 ARG ARDUINO_CLI_VERSION=1.5.1
@@ -40,5 +40,5 @@ RUN for i in 1 2 3; do \
 # flash then reads back garbage: "partition 0 invalid magic number" boot loop.
 ENV FQBN="esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=huge_app,FlashMode=dio,FlashFreq=40"
 WORKDIR /src
-# Mount the sketch folder at /src/hid_bridge_ble and an output folder at /out.
-CMD ["sh", "-c", "arduino-cli compile -b \"$FQBN\" --output-dir /out hid_bridge_ble && ls -l /out/*.merged.bin"]
+# Mount the sketch folder at /src/hid_bridge_ble_c3 and an output folder at /out.
+CMD ["sh", "-c", "arduino-cli compile -b \"$FQBN\" --output-dir /out hid_bridge_ble_c3 && ls -l /out/*.merged.bin"]

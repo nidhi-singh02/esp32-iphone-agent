@@ -74,7 +74,7 @@ Use a USB-C hub with power pass-through if the phone should keep charging while 
 
 ## BLE variant (ESP32-C3 / classic ESP32)
 
-An ESP32-C3 or a classic ESP32 can stand in for the ESP32-S3. Flash `hardware/hid_bridge_ble`: the board pairs with the iPhone as a Bluetooth mouse and keyboard, and it still talks to the server over Wi-Fi with the same TCP line protocol, so the server stays the same. Setup, flashing, and pairing are in [hardware/hid_bridge_ble/README_BLE.md](hardware/hid_bridge_ble/README_BLE.md).
+An ESP32-C3 or a classic ESP32 can stand in for the ESP32-S3. Flash `hardware/hid_bridge_ble_c3`: the board pairs with the iPhone as a Bluetooth mouse and keyboard, and it still talks to the server over Wi-Fi with the same TCP line protocol, so the server stays the same. Setup, flashing, and pairing are in [hardware/hid_bridge_ble_c3/README_BLE.md](hardware/hid_bridge_ble_c3/README_BLE.md).
 
 ## Quick start
 
