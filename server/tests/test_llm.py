@@ -51,3 +51,20 @@ def test_extra_body_and_image_are_sent():
     body = seen[0]
     assert body["reasoning_effort"] == "none"
     assert body["messages"][1]["content"][0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+
+def test_temperature_is_dropped_when_the_model_refuses_it():
+    llm = LLM("http://test/v1", "claude")
+    seen = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body)
+        if "temperature" in body:
+            return httpx.Response(400, json={"error": {"message": "`temperature` is deprecated for this model."}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "DO: wait"}}]})
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait"
+    assert asyncio.run(llm.chat("sys", "again")) == "DO: wait"
+    assert ["temperature" in b for b in seen] == [True, False, False]
