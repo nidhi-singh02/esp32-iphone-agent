@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import httpx
+import pytest
 
 from hidagent.llm import LLM
 
@@ -68,3 +69,85 @@ def test_temperature_is_dropped_when_the_model_refuses_it():
     assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait"
     assert asyncio.run(llm.chat("sys", "again")) == "DO: wait"
     assert ["temperature" in b for b in seen] == [True, False, False]
+
+
+def test_rate_limit_is_waited_out(monkeypatch):
+    monkeypatch.setattr("hidagent.llm.RATE_LIMIT_WAITS", (0, 0))
+    llm = LLM("http://test/v1", "gemini")
+    calls = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) < 3:
+            return httpx.Response(429, headers={"retry-after": "0"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "DO: wait"}}]})
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait" and len(calls) == 3
+
+
+@pytest.mark.parametrize("body", [
+    "Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+    '{"error": {"code": "insufficient_quota", "message": "You exceeded your current quota"}}',
+])
+def test_exhausted_quota_fails_fast(body):
+    llm = LLM("http://test/v1", "gemini")
+    calls = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(429, text=body)
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(llm.chat("sys", "hi"))
+    assert len(calls) == 1
+
+
+def test_rate_limit_gives_up_after_the_last_wait(monkeypatch):
+    monkeypatch.setattr("hidagent.llm.RATE_LIMIT_WAITS", (0, 0))
+    llm = LLM("http://test/v1", "gemini")
+    calls = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(429)
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(llm.chat("sys", "hi"))
+    assert len(calls) == 3
+
+
+def test_temperature_retry_also_waits_out_a_rate_limit(monkeypatch):
+    monkeypatch.setattr("hidagent.llm.RATE_LIMIT_WAITS", (0, 0))
+    llm = LLM("http://test/v1", "claude")
+    seen = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append("temperature" in body)
+        if "temperature" in body:
+            return httpx.Response(400, json={"error": {"message": "`temperature` is deprecated for this model."}})
+        if seen.count(False) == 1:  # the first retry without temperature is rate limited
+            return httpx.Response(429, headers={"retry-after": "0"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "DO: wait"}}]})
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    assert asyncio.run(llm.chat("sys", "hi")) == "DO: wait"
+    assert seen == [True, False, False]
+
+
+def test_other_400_mentioning_temperature_is_not_swallowed():
+    llm = LLM("http://test/v1", "gpt")
+    seen = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(400, json={"error": {"message": "invalid image; temperature is fine"}})
+
+    llm._http = httpx.AsyncClient(base_url="http://test/v1", transport=httpx.MockTransport(handle))
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(llm.chat("sys", "hi"))
+    assert len(seen) == 1 and "temperature" in seen[0]
+    assert llm._temperature is True
